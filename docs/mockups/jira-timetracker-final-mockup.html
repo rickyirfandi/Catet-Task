@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jira TimeTracker — Complete UI Mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-body: #08090c;
+  --bg-panel: #14171e;
+  --bg-card: #1b1f2a;
+  --bg-card-hover: #222738;
+  --bg-card-active: #1a2435;
+  --border: #2a2f3d;
+  --border-focus: #3d7aed;
+  --text-primary: #e8ecf4;
+  --text-secondary: #7a8299;
+  --text-muted: #4a5068;
+  --accent-blue: #3d7aed;
+  --accent-green: #2dd4a0;
+  --accent-green-dim: rgba(45,212,160,0.10);
+  --accent-orange: #f0993e;
+  --accent-orange-dim: rgba(240,153,62,0.10);
+  --accent-red: #ef5757;
+  --accent-red-dim: rgba(239,87,87,0.10);
+  --accent-purple: #a78bfa;
+  --accent-purple-dim: rgba(167,139,250,0.10);
+  --accent-yellow: #facc15;
+  --accent-yellow-dim: rgba(250,204,21,0.10);
+  --radius: 10px;
+  --radius-sm: 6px;
+  --mono: 'JetBrains Mono', monospace;
+  --body: 'Outfit', sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg-body);color:var(--text-primary);font-family:var(--body);padding:40px 20px 100px;min-height:100vh;}
+
+/* ===== PAGE HEADER ===== */
+.hero{text-align:center;margin-bottom:64px;}
+.hero-badge{display:inline-block;font-size:11px;font-weight:600;color:var(--accent-blue);letter-spacing:3px;text-transform:uppercase;font-family:var(--mono);margin-bottom:12px;background:rgba(61,122,237,0.08);padding:6px 16px;border-radius:20px;border:1px solid rgba(61,122,237,0.15);}
+.hero h1{font-size:40px;font-weight:700;margin-bottom:8px;}
+.hero h1 span{background:linear-gradient(135deg,var(--accent-blue),var(--accent-purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.hero p{font-size:15px;color:var(--text-secondary);max-width:500px;margin:0 auto;line-height:1.6;}
+
+/* ===== SECTION ===== */
+.section{max-width:1400px;margin:0 auto 72px;}
+.section-header{display:flex;align-items:center;gap:12px;margin-bottom:24px;}
+.section-num{width:32px;height:32px;border-radius:8px;background:var(--accent-blue);color:white;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;font-family:var(--mono);flex-shrink:0;}
+.section-title{font-size:20px;font-weight:700;}
+.section-desc{font-size:13px;color:var(--text-secondary);margin-left:44px;margin-top:-16px;margin-bottom:24px;max-width:600px;line-height:1.5;}
+
+/* ===== PANEL ===== */
+.panels-row{display:flex;gap:32px;justify-content:center;flex-wrap:wrap;align-items:flex-start;}
+.panel-wrapper{display:flex;flex-direction:column;align-items:center;}
+.panel-label{font-size:10px;font-weight:600;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;font-family:var(--mono);margin-bottom:12px;}
+.panel{width:340px;background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,0.45),0 0 0 1px rgba(255,255,255,0.03) inset;}
+.panel.wide{width:370px;}
+
+/* ===== PANEL HEADER ===== */
+.p-header{padding:16px 18px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.p-header-left{display:flex;align-items:center;gap:10px;}
+.back-btn{width:28px;height:28px;border-radius:6px;background:var(--bg-card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-secondary);font-size:14px;cursor:pointer;}
+.p-title{font-size:15px;font-weight:600;}
+.p-sub{font-size:11px;color:var(--text-secondary);font-family:var(--mono);}
+.avatar{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:white;}
+
+/* ===== TABS ===== */
+.tabs{display:flex;gap:2px;background:var(--bg-card);border-radius:var(--radius-sm);padding:2px;}
+.tab{font-size:11px;font-weight:600;color:var(--text-muted);padding:5px 12px;border-radius:4px;cursor:pointer;font-family:var(--mono);transition:all .15s;}
+.tab.active{background:var(--accent-blue);color:white;}
+
+/* ===== TRAY STATES ===== */
+.tray-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;}
+.tray-row{display:flex;align-items:center;gap:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;}
+.tray-state{font-size:11px;font-weight:600;color:var(--text-muted);font-family:var(--mono);width:70px;flex-shrink:0;text-transform:uppercase;letter-spacing:1px;}
+.tray-bar{background:linear-gradient(180deg,#2a2a2e 0%,#1d1d21 100%);border-radius:6px;height:30px;display:inline-flex;align-items:center;padding:0 10px;gap:6px;font-family:var(--mono);font-size:12px;font-weight:500;color:#ffffffcc;box-shadow:0 2px 8px rgba(0,0,0,0.3);}
+.dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.dot.idle{background:var(--text-muted);}
+.dot.run{background:var(--accent-green);animation:pulse 2s ease-in-out infinite;}
+.dot.pause{background:var(--accent-orange);animation:blink 1.5s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(45,212,160,0.4)}50%{opacity:.7;box-shadow:0 0 0 4px rgba(45,212,160,0)}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.tray-note{font-size:11px;color:var(--text-muted);flex:1;text-align:right;}
+
+/* ===== LOGIN ===== */
+.login-header{padding:28px 24px 12px;text-align:center;}
+.login-logo{width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,var(--accent-blue),#6366f1);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:22px;font-weight:700;color:white;font-family:var(--mono);box-shadow:0 6px 24px rgba(61,122,237,0.3);}
+.login-title{font-size:18px;font-weight:600;margin-bottom:4px;}
+.login-desc{font-size:12px;color:var(--text-secondary);}
+.auth-methods{padding:0 24px 16px;display:flex;gap:6px;}
+.auth-chip{font-size:10px;font-weight:500;color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border);padding:5px 12px;border-radius:20px;cursor:pointer;font-family:var(--mono);}
+.auth-chip.active{color:var(--accent-blue);border-color:var(--accent-blue);background:rgba(61,122,237,0.08);}
+.login-form{padding:0 24px 24px;display:flex;flex-direction:column;gap:12px;}
+.input-group{display:flex;flex-direction:column;gap:4px;}
+.input-label{font-size:11px;font-weight:600;color:var(--text-secondary);letter-spacing:.5px;}
+.input-field{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;font-size:13px;color:var(--text-primary);font-family:var(--mono);}
+.input-field.muted{color:var(--text-secondary);}
+.btn-primary{background:linear-gradient(135deg,var(--accent-blue),#5b8def);border:none;border-radius:var(--radius-sm);padding:11px;font-size:13px;font-weight:600;color:white;cursor:pointer;font-family:var(--body);margin-top:4px;transition:opacity .15s;}
+
+/* ===== SEARCH ===== */
+.search-bar{margin:12px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted);}
+
+/* ===== TASK CARDS ===== */
+.task-list{padding:0 12px 14px;display:flex;flex-direction:column;gap:5px;}
+.group-label{font-size:10px;font-weight:600;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;font-family:var(--mono);padding:8px 4px 4px;}
+.group-label.green{color:var(--accent-green);}
+.task{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:11px 13px;cursor:pointer;transition:all .15s;}
+.task:hover{background:var(--bg-card-hover);}
+.task.active{background:var(--bg-card-active);border-color:var(--accent-blue);box-shadow:0 0 0 1px var(--accent-blue),0 4px 16px rgba(61,122,237,0.1);}
+.task-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+.task-key{font-size:11px;font-weight:600;font-family:var(--mono);color:var(--accent-blue);}
+.task.active .task-key{color:var(--accent-green);}
+.task-name{font-size:13px;font-weight:500;line-height:1.35;margin-bottom:7px;}
+.task-bottom{display:flex;align-items:center;justify-content:space-between;}
+.task-project{font-size:10px;color:var(--text-muted);font-family:var(--mono);}
+.task-timer{display:flex;align-items:center;gap:6px;}
+.task-time{font-size:13px;font-weight:600;font-family:var(--mono);color:var(--text-muted);}
+.task.active .task-time{color:var(--accent-green);}
+.play-btn{width:26px;height:26px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px;background:var(--bg-card-hover);color:var(--text-secondary);}
+.play-btn.on{background:var(--accent-green);color:#0d0f13;}
+
+/* Logged/dimmed task */
+.task.logged{opacity:.4;padding:8px 13px;}
+.task.logged .task-top{margin-bottom:0;}
+.task.logged .task-name{display:none;}
+.task.logged .task-bottom{display:none;}
+.logged-row{display:flex;align-items:center;justify-content:space-between;}
+.logged-name{font-size:11px;color:var(--text-muted);margin-left:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;}
+.logged-dur{font-size:11px;font-family:var(--mono);color:var(--text-muted);flex-shrink:0;}
+
+/* ===== BADGES ===== */
+.badge{font-size:9px;font-weight:600;padding:2px 7px;border-radius:3px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;}
+.badge-progress{background:rgba(61,122,237,0.12);color:var(--accent-blue);}
+.badge-todo{background:rgba(122,130,153,0.12);color:var(--text-secondary);}
+.badge-review{background:var(--accent-purple-dim);color:var(--accent-purple);}
+.badge-running{background:var(--accent-green-dim);color:var(--accent-green);display:flex;align-items:center;gap:4px;}
+.badge-running .dot{width:5px;height:5px;}
+.badge-rounded{background:var(--accent-orange-dim);color:var(--accent-orange);}
+.badge-logged{background:rgba(74,80,104,0.15);color:var(--text-muted);}
+.badge-error{background:var(--accent-red-dim);color:var(--accent-red);}
+
+/* ===== SUMMARY BAR ===== */
+.summary-bar{padding:14px 18px;background:var(--bg-card);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.sum-total{display:flex;align-items:baseline;gap:6px;}
+.sum-time{font-size:22px;font-weight:700;font-family:var(--mono);}
+.sum-label{font-size:11px;color:var(--text-secondary);}
+.sum-label .muted{color:var(--text-muted);}
+.sum-count{font-size:11px;color:var(--text-secondary);background:var(--bg-panel);padding:4px 10px;border-radius:20px;font-family:var(--mono);}
+
+/* ===== DURATION BAR ===== */
+.dur-bar{margin:0 18px 0;height:8px;border-radius:4px;background:var(--bg-card);display:flex;overflow:hidden;gap:2px;}
+.dur-seg{height:100%;border-radius:3px;}
+
+/* ===== SELECT BAR ===== */
+.select-bar{padding:10px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);}
+.select-left{display:flex;align-items:center;gap:8px;}
+.cb-all{width:18px;height:18px;border-radius:4px;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent;flex-shrink:0;}
+.cb-all.checked{background:var(--accent-blue);border-color:var(--accent-blue);color:white;}
+.cb-all.partial{border-color:var(--accent-blue);color:var(--accent-blue);}
+.select-label{font-size:12px;color:var(--text-secondary);}
+.select-links{display:flex;gap:8px;font-size:11px;font-family:var(--mono);font-weight:500;}
+.select-links a{color:var(--accent-blue);cursor:pointer;}
+.select-links .sep{color:var(--text-muted);}
+
+/* ===== ROUND OPTIONS ===== */
+.round-bar{padding:10px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);}
+.round-label{font-size:12px;color:var(--text-secondary);}
+.round-chips{display:flex;gap:4px;}
+.rc{font-size:10px;font-weight:600;font-family:var(--mono);padding:4px 10px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border);color:var(--text-muted);cursor:pointer;}
+.rc.active{background:rgba(61,122,237,0.12);border-color:var(--accent-blue);color:var(--accent-blue);}
+
+/* ===== REVIEW ITEMS ===== */
+.review-list{padding:10px 12px;display:flex;flex-direction:column;gap:5px;}
+.r-item{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:11px 13px;display:flex;gap:11px;cursor:pointer;transition:all .15s;}
+.r-item:hover{background:var(--bg-card-hover);}
+.r-item.selected{border-color:rgba(61,122,237,0.4);background:rgba(61,122,237,0.04);}
+.r-item.deselected{opacity:.45;}
+.r-item.deselected:hover{opacity:.7;}
+.item-cb{width:20px;height:20px;border-radius:5px;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;color:transparent;flex-shrink:0;margin-top:1px;}
+.r-item.selected .item-cb{background:var(--accent-blue);border-color:var(--accent-blue);color:white;}
+.item-body{flex:1;min-width:0;}
+.r-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+.r-name{font-size:13px;font-weight:500;line-height:1.35;margin-bottom:7px;}
+.r-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.r-dur-group{display:flex;align-items:center;gap:6px;}
+.r-dur{font-size:14px;font-weight:600;font-family:var(--mono);}
+.r-dur-orig{font-size:10px;color:var(--text-muted);font-family:var(--mono);text-decoration:line-through;}
+.r-comment{font-size:11px;color:var(--text-muted);white-space:nowrap;}
+.r-comment.has{color:var(--accent-green);}
+
+/* ===== CALLOUT ===== */
+.callout{margin:0 12px 10px;padding:11px 13px;border-radius:var(--radius-sm);display:flex;align-items:flex-start;gap:10px;}
+.callout.yellow{background:var(--accent-yellow-dim);border:1px solid rgba(250,204,21,0.2);}
+.callout-icon{font-size:15px;flex-shrink:0;margin-top:1px;}
+.callout-text{font-size:12px;color:var(--text-secondary);line-height:1.5;}
+.callout-text strong{color:var(--accent-orange);font-weight:600;}
+
+/* ===== FOOTER ===== */
+.panel-footer{border-top:1px solid var(--border);padding:14px 18px;background:var(--bg-panel);}
+.footer-info{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.footer-sel{font-size:12px;color:var(--text-secondary);font-family:var(--mono);}
+.footer-sel strong{color:var(--text-primary);font-weight:600;}
+.footer-rem{font-size:11px;color:var(--text-muted);font-family:var(--mono);}
+.footer-btns{display:flex;gap:8px;}
+.btn-log{flex:1;background:linear-gradient(135deg,var(--accent-green),#22b88a);border:none;border-radius:var(--radius-sm);padding:12px;font-size:13px;font-weight:600;color:#0d0f13;cursor:pointer;font-family:var(--body);display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(45,212,160,0.2);}
+.btn-log.disabled{opacity:.4;cursor:not-allowed;box-shadow:none;}
+.btn-cancel{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;font-weight:500;color:var(--text-secondary);cursor:pointer;font-family:var(--body);}
+
+/* ===== EDIT FORM ===== */
+.edit-task-hdr{padding:14px 18px;background:var(--bg-card);border-bottom:1px solid var(--border);}
+.edit-key{font-size:12px;font-weight:600;font-family:var(--mono);color:var(--accent-blue);margin-bottom:3px;}
+.edit-name{font-size:14px;font-weight:500;line-height:1.4;}
+.edit-form{padding:16px 18px;display:flex;flex-direction:column;gap:16px;}
+.field{display:flex;flex-direction:column;gap:5px;}
+.field-label{font-size:11px;font-weight:600;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase;font-family:var(--mono);display:flex;align-items:center;justify-content:space-between;}
+.field-hint{font-size:10px;color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;}
+
+.dur-editor{display:flex;align-items:center;gap:4px;}
+.dur-seg-input{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 0;width:58px;text-align:center;font-size:22px;font-weight:600;font-family:var(--mono);color:var(--text-primary);}
+.dur-sep{font-size:20px;font-weight:600;color:var(--text-muted);font-family:var(--mono);}
+.dur-unit{font-size:10px;color:var(--text-muted);font-family:var(--mono);text-align:center;margin-top:2px;}
+.dur-col{display:flex;flex-direction:column;align-items:center;}
+.dur-adj{display:flex;flex-direction:column;gap:2px;margin-left:8px;}
+.adj-btn{width:28px;height:22px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border);color:var(--text-secondary);font-size:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+.quick-durs{display:flex;gap:4px;margin-top:6px;}
+.qd{font-size:10px;font-weight:500;font-family:var(--mono);padding:4px 10px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border);color:var(--text-muted);cursor:pointer;}
+.qd.active{background:rgba(61,122,237,0.12);border-color:var(--accent-blue);color:var(--accent-blue);}
+
+.date-row{display:flex;align-items:center;gap:8px;}
+.date-val{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 14px;font-size:13px;font-family:var(--mono);color:var(--text-primary);flex:1;}
+.date-badge{font-size:10px;font-weight:600;color:var(--accent-green);background:var(--accent-green-dim);padding:3px 8px;border-radius:4px;font-family:var(--mono);}
+
+.time-range{display:flex;align-items:center;gap:6px;}
+.tr-val{font-size:12px;font-family:var(--mono);color:var(--text-secondary);background:var(--bg-card);border:1px solid var(--border);padding:6px 10px;border-radius:4px;}
+.tr-sep{color:var(--text-muted);font-size:14px;}
+
+.comment-area{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;min-height:72px;font-size:13px;color:var(--text-primary);font-family:var(--body);line-height:1.5;width:100%;}
+.templates{display:flex;gap:4px;flex-wrap:wrap;}
+.tpl{font-size:10px;font-weight:500;padding:4px 10px;border-radius:20px;background:var(--bg-card);border:1px solid var(--border);color:var(--text-muted);cursor:pointer;}
+.tpl:hover{border-color:rgba(167,139,250,0.4);color:var(--accent-purple);}
+
+.edit-btns{padding:0 18px 18px;display:flex;gap:8px;}
+.btn-save{flex:1;background:var(--accent-blue);border:none;border-radius:var(--radius-sm);padding:11px;font-size:13px;font-weight:600;color:white;cursor:pointer;font-family:var(--body);text-align:center;}
+.btn-skip{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:11px 14px;font-size:13px;font-weight:500;color:var(--text-secondary);cursor:pointer;font-family:var(--body);}
+.btn-del{background:transparent;border:1px solid var(--border);border-radius:var(--radius-sm);padding:11px 14px;font-size:13px;color:var(--accent-red);cursor:pointer;font-family:var(--body);}
+
+/* ===== SUBMIT PROGRESS ===== */
+.submit-body{padding:28px 18px;display:flex;flex-direction:column;align-items:center;gap:18px;}
+.spinner{width:44px;height:44px;border:3px solid var(--border);border-top-color:var(--accent-green);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.submit-text{font-size:15px;font-weight:600;text-align:center;}
+.prog-list{width:100%;display:flex;flex-direction:column;gap:6px;}
+.prog-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg-card);border-radius:var(--radius-sm);border:1px solid var(--border);}
+.prog-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0;}
+.prog-icon.done{color:var(--accent-green);}
+.prog-icon.loading{color:var(--accent-orange);animation:pulse-icon 1s ease-in-out infinite;}
+.prog-icon.pending{color:var(--text-muted);}
+.prog-icon.error{color:var(--accent-red);}
+@keyframes pulse-icon{0%,100%{opacity:1}50%{opacity:.4}}
+.prog-info{flex:1;min-width:0;}
+.prog-key{font-size:11px;font-weight:600;font-family:var(--mono);color:var(--text-secondary);}
+.prog-dur{font-size:10px;color:var(--text-muted);font-family:var(--mono);}
+.prog-action{font-size:10px;color:var(--accent-blue);cursor:pointer;}
+
+/* ===== SUCCESS ===== */
+.success-body{padding:28px 18px;display:flex;flex-direction:column;align-items:center;gap:6px;}
+.success-icon{width:56px;height:56px;border-radius:50%;background:var(--accent-green-dim);border:2px solid var(--accent-green);display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:4px;animation:scaleIn .3s ease-out;}
+@keyframes scaleIn{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+.success-title{font-size:17px;font-weight:700;}
+.success-detail{font-size:13px;color:var(--text-secondary);text-align:center;line-height:1.5;}
+.result-list{width:100%;margin-top:10px;display:flex;flex-direction:column;gap:5px;}
+.res-group{font-size:10px;font-weight:600;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;font-family:var(--mono);margin-top:8px;margin-bottom:2px;}
+.res-item{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;background:var(--bg-card);border-radius:var(--radius-sm);border:1px solid var(--border);}
+.res-left{display:flex;align-items:center;gap:8px;}
+.res-icon{font-size:13px;width:16px;text-align:center;}
+.res-icon.done{color:var(--accent-green);}
+.res-icon.run{color:var(--accent-orange);}
+.res-icon.skip{color:var(--text-muted);}
+.res-key{font-size:11px;font-weight:600;font-family:var(--mono);color:var(--accent-blue);}
+.res-key.muted{color:var(--text-muted);}
+.res-dur{font-size:12px;font-weight:600;font-family:var(--mono);}
+.res-dur.muted{color:var(--text-muted);}
+.res-status{font-size:10px;font-family:var(--mono);}
+.res-status.logged{color:var(--accent-green);}
+.res-status.kept{color:var(--accent-orange);}
+
+.success-footer{padding:8px 18px 18px;display:flex;gap:8px;}
+.btn-done{flex:1;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:11px;font-size:13px;font-weight:600;color:var(--text-primary);cursor:pointer;font-family:var(--body);text-align:center;}
+.btn-jira{flex:1;background:linear-gradient(135deg,var(--accent-blue),#5b8def);border:none;border-radius:var(--radius-sm);padding:11px;font-size:13px;font-weight:600;color:white;cursor:pointer;font-family:var(--body);text-align:center;}
+
+/* ===== SETTINGS ===== */
+.settings-list{padding:14px 14px;display:flex;flex-direction:column;gap:10px;}
+.setting-item{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);}
+.setting-info{flex:1;}
+.setting-name{font-size:13px;font-weight:600;margin-bottom:2px;}
+.setting-desc{font-size:11px;color:var(--text-muted);line-height:1.4;}
+.toggle{width:40px;height:22px;border-radius:11px;background:var(--border);position:relative;cursor:pointer;flex-shrink:0;margin-left:12px;transition:background .2s;}
+.toggle.on{background:var(--accent-green);}
+.toggle::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:white;transition:transform .2s;}
+.toggle.on::after{transform:translateX(18px);}
+.setting-val{font-size:12px;font-family:var(--mono);color:var(--accent-blue);font-weight:600;flex-shrink:0;margin-left:12px;background:rgba(61,122,237,0.08);padding:4px 10px;border-radius:4px;}
+.btn-danger{margin:0 14px 14px;background:transparent;border:1px solid var(--accent-red);border-radius:var(--radius-sm);padding:10px;font-size:13px;font-weight:500;color:var(--accent-red);cursor:pointer;font-family:var(--body);width:calc(100% - 28px);text-align:center;}
+
+/* ===== KEYBOARD SHORTCUTS SECTION ===== */
+.shortcuts{display:flex;gap:16px;flex-wrap:wrap;margin-left:44px;margin-top:8px;}
+.shortcut{display:flex;align-items:center;gap:8px;}
+.kbd{background:var(--bg-card);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:11px;font-family:var(--mono);color:var(--text-secondary);box-shadow:0 1px 2px rgba(0,0,0,0.2);}
+.shortcut-label{font-size:11px;color:var(--text-muted);}
+
+/* ===== ARROW ===== */
+.arrow{display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:22px;padding-top:30px;flex-shrink:0;}
+@media(max-width:900px){.arrow{display:none;}.panels-row{flex-direction:column;align-items:center;}}
+
+/* ===== ANNOTATION ===== */
+.note{margin-top:14px;padding:12px 14px;background:rgba(61,122,237,0.05);border:1px dashed rgba(61,122,237,0.18);border-radius:var(--radius);max-width:340px;width:100%;}
+.note.wide{max-width:370px;}
+.note-title{font-size:10px;font-weight:600;color:var(--accent-blue);letter-spacing:1px;text-transform:uppercase;font-family:var(--mono);margin-bottom:5px;}
+.note-text{font-size:11px;color:var(--text-secondary);line-height:1.6;}
+.note-text code{font-family:var(--mono);font-size:10px;background:var(--bg-card);padding:1px 5px;border-radius:3px;color:var(--accent-purple);}
+.note-text ul{margin:4px 0 0 14px;display:flex;flex-direction:column;gap:3px;}
+.note-text li{font-size:11px;color:var(--text-secondary);line-height:1.5;}
+
+/* divider */
+.divider{width:100%;max-width:1400px;margin:0 auto;height:1px;background:var(--border);opacity:.5;}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ HERO ══════════════ -->
+<div class="hero">
+  <div class="hero-badge">Complete UI Mockup v1.0</div>
+  <h1>Jira <span>TimeTracker</span></h1>
+  <p>Menu bar time tracking app. Track tasks, switch timers, log to Jira — all from your system tray.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════ -->
+<!-- SECTION 1: SYSTEM TRAY STATES                    -->
+<!-- ══════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">1</div>
+    <div class="section-title">System Tray States</div>
+  </div>
+  <div class="section-desc">The tray icon + title is always visible. Updates every second when running. This is the primary at-a-glance interface.</div>
+
+  <div class="tray-grid">
+    <div class="tray-row">
+      <span class="tray-state">Idle</span>
+      <div class="tray-bar"><span class="dot idle"></span> ⏱ JTT</div>
+      <span class="tray-note">No active timer</span>
+    </div>
+    <div class="tray-row">
+      <span class="tray-state">Running</span>
+      <div class="tray-bar"><span class="dot run"></span> ABC-123 · 00:34:12</div>
+      <span class="tray-note">Green pulse, updates /sec</span>
+    </div>
+    <div class="tray-row">
+      <span class="tray-state">Paused</span>
+      <div class="tray-bar"><span class="dot pause"></span> ABC-123 · 00:34:12 ⏸</div>
+      <span class="tray-note">Orange blink</span>
+    </div>
+    <div class="tray-row">
+      <span class="tray-state">Unsynced</span>
+      <div class="tray-bar"><span class="dot idle"></span> ⏱ JTT · 3 unlogged</div>
+      <span class="tray-note">Reminder to log</span>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ══════════════════════════════════════════════════ -->
+<!-- SECTION 2: LOGIN                                  -->
+<!-- ══════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">2</div>
+    <div class="section-title">Login / Connect to Jira</div>
+  </div>
+  <div class="section-desc">First-time setup. Support API Token (MVP), OAuth 2.0 and Server PAT (Phase 2). Credentials stored in OS Keychain.</div>
+
+  <div class="panels-row">
+    <div class="panel-wrapper">
+      <div class="panel-label">Empty State</div>
+      <div class="panel">
+        <div class="login-header">
+          <div class="login-logo">JT</div>
+          <div class="login-title">Connect to Jira</div>
+          <div class="login-desc">Track time, log work, stay in flow.</div>
+        </div>
+        <div class="auth-methods">
+          <div class="auth-chip active">API Token</div>
+          <div class="auth-chip">OAuth 2.0</div>
+          <div class="auth-chip">Server PAT</div>
+        </div>
+        <div class="login-form">
+          <div class="input-group">
+            <span class="input-label">Jira Domain</span>
+            <div class="input-field muted">company.atlassian.com</div>
+          </div>
+          <div class="input-group">
+            <span class="input-label">Email</span>
+            <div class="input-field muted">you@company.com</div>
+          </div>
+          <div class="input-group">
+            <span class="input-label">API Token</span>
+            <div class="input-field muted">paste your token here</div>
+          </div>
+          <button class="btn-primary">Connect & Verify →</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow">→</div>
+
+    <div class="panel-wrapper">
+      <div class="panel-label">Filled State</div>
+      <div class="panel">
+        <div class="login-header">
+          <div class="login-logo">JT</div>
+          <div class="login-title">Connect to Jira</div>
+          <div class="login-desc">Track time, log work, stay in flow.</div>
+        </div>
+        <div class="auth-methods">
+          <div class="auth-chip active">API Token</div>
+          <div class="auth-chip">OAuth 2.0</div>
+          <div class="auth-chip">Server PAT</div>
+        </div>
+        <div class="login-form">
+          <div class="input-group">
+            <span class="input-label">Jira Domain</span>
+            <div class="input-field">logique.atlassian.com</div>
+          </div>
+          <div class="input-group">
+            <span class="input-label">Email</span>
+            <div class="input-field">ricky@logique.co.id</div>
+          </div>
+          <div class="input-group">
+            <span class="input-label">API Token</span>
+            <div class="input-field" style="letter-spacing:2px;color:var(--text-secondary)">••••••••••••••••</div>
+          </div>
+          <button class="btn-primary">Connect & Verify →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ══════════════════════════════════════════════════ -->
+<!-- SECTION 3: TIMER VIEW                             -->
+<!-- ══════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">3</div>
+    <div class="section-title">Timer View — Main Panel</div>
+  </div>
+  <div class="section-desc">Default view after login. Shows task list with play/pause controls. After partial logging, shows 3 sections: tracking, unlogged, and logged.</div>
+
+  <div class="panels-row">
+
+    <!-- Default timer view -->
+    <div class="panel-wrapper">
+      <div class="panel-label">Default (All Fresh)</div>
+      <div class="panel">
+        <div class="p-header">
+          <div class="tabs">
+            <div class="tab active">Timer</div>
+            <div class="tab">Today</div>
+            <div class="tab">⚙</div>
+          </div>
+          <div class="avatar">RW</div>
+        </div>
+        <div class="search-bar">🔍 Search tasks or paste PROJ-123...</div>
+        <div class="task-list">
+          <div class="group-label">▶ Currently Tracking</div>
+          <div class="task active">
+            <div class="task-top">
+              <span class="task-key">ABC-123</span>
+              <span class="badge badge-running"><span class="dot run"></span> running</span>
+            </div>
+            <div class="task-name">Fix image compression pipeline for vehicle inspection</div>
+            <div class="task-bottom">
+              <span class="task-project">INSPECT · Sprint 14</span>
+              <div class="task-timer"><span class="task-time">00:34:12</span><div class="play-btn on">⏸</div></div>
+            </div>
+          </div>
+          <div class="group-label">My Tasks</div>
+          <div class="task">
+            <div class="task-top">
+              <span class="task-key">ABC-124</span>
+              <span class="badge badge-progress">In Progress</span>
+            </div>
+            <div class="task-name">Implement offline sync for bidding module</div>
+            <div class="task-bottom">
+              <span class="task-project">INSPECT · Sprint 14</span>
+              <div class="task-timer"><span class="task-time">01:12:45</span><div class="play-btn">▶</div></div>
+            </div>
+          </div>
+          <div class="task">
+            <div class="task-top">
+              <span class="task-key">ABC-130</span>
+              <span class="badge badge-review">Review</span>
+            </div>
+            <div class="task-name">Camera UI — manual exposure control</div>
+            <div class="task-bottom">
+              <span class="task-project">INSPECT · Sprint 14</span>
+              <div class="task-timer"><span class="task-time">--:--</span><div class="play-btn">▶</div></div>
+            </div>
+          </div>
+          <div class="task">
+            <div class="task-top">
+              <span class="task-key">BID-087</span>
+              <span class="badge badge-todo">To Do</span>
+            </div>
+            <div class="task-name">Add WebSocket for real-time bid updates</div>
+            <div class="task-bottom">
+              <span class="task-project">BIDDING · Sprint 14</span>
+              <div class="task-timer"><span class="task-time">--:--</span><div class="play-btn">▶</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow">→</div>
+
+    <!-- After partial log -->
+    <div class="panel-wrapper">
+      <div class="panel-label">After Partial Log</div>
+      <div class="panel">
+        <div class="p-header">
+          <div class="tabs">
+            <div class="tab active">Timer</div>
+            <div class="tab">Today</div>
+            <div class="tab">⚙</div>
+          </div>
+          <div class="avatar">RW</div>
+        </div>
+        <div class="search-bar">🔍 Search tasks or paste PROJ-123...</div>
+        <div class="task-list">
+          <div class="group-label">▶ Currently Tracking</div>
+          <div class="task active">
+            <div class="task-top">
+              <span class="task-key">ABC-130</span>
+              <span class="badge badge-running"><span class="dot run"></span> running</span>
+            </div>
+            <div class="task-name">Camera UI — manual exposure control</div>
+            <div class="task-bottom">
+              <span class="task-project">INSPECT · Sprint 14</span>
+              <div class="task-timer"><span class="task-time">01:18:33</span><div class="play-btn on">⏸</div></div>
+            </div>
+          </div>
+
+          <div class="group-label">Unlogged</div>
+          <div class="task">
+            <div class="task-top">
+              <span class="task-key">BID-087</span>
+              <span class="badge badge-todo">Stopped</span>
+            </div>
+            <div class="task-name">Add WebSocket for real-time bid updates</div>
+            <div class="task-bottom">
+              <span class="task-project">BIDDING · Sprint 14</span>
+              <div class="task-timer"><span class="task-time">0h 42m</span><div class="play-btn">▶</div></div>
+            </div>
+          </div>
+
+          <div class="group-label green">✓ Logged Today</div>
+          <div class="task logged">
+            <div class="task-top">
+              <div class="logged-row" style="width:100%">
+                <span class="task-key" style="color:var(--text-muted)">ABC-123</span>
+                <span class="logged-name">Fix image compression...</span>
+                <span class="logged-dur">2h 30m ✓</span>
+              </div>
+            </div>
+          </div>
+          <div class="task logged">
+            <div class="task-top">
+              <div class="logged-row" style="width:100%">
+                <span class="task-key" style="color:var(--text-muted)">ABC-124</span>
+                <span class="logged-name">Implement offline sync...</span>
+                <span class="logged-dur">2h 00m ✓</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <div class="note-title">Post-Log Sections</div>
+        <div class="note-text">
+          <ul>
+            <li><strong style="color:var(--accent-green)">Currently Tracking</strong> — timer uninterrupted</li>
+            <li><strong style="color:var(--text-primary)">Unlogged</strong> — skipped, ready for next log</li>
+            <li><strong style="color:var(--text-muted)">Logged Today</strong> — dimmed, <code>synced = true</code></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ══════════════════════════════════════════════════ -->
+<!-- SECTION 4: TODAY VIEW                             -->
+<!-- ══════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">4</div>
+    <div class="section-title">Today View — Daily Summary</div>
+  </div>
+  <div class="section-desc">Overview of all tracked time today. Visual bar chart, total hours, one-click access to logging flow.</div>
+
+  <div class="panels-row">
+    <div class="panel-wrapper">
+      <div class="panel-label">Today Tab</div>
+      <div class="panel">
+        <div class="p-header">
+          <div class="tabs">
+            <div class="tab">Timer</div>
+            <div class="tab active">Today</div>
+            <div class="tab">⚙</div>
+          </div>
+          <div class="avatar">RW</div>
+        </div>
+
+        <div style="padding:16px 18px 10px;">
+          <div style="font-size:12px;color:var(--text-muted);font-family:var(--mono);margin-bottom:8px;">FRI, 20 FEB 2026</div>
+          <div style="display:flex;align-items:baseline;gap:8px;">
+            <span style="font-size:32px;font-weight:700;font-family:var(--mono);">6h 22m</span>
+            <span style="font-size:12px;color:var(--text-secondary);">tracked today</span>
+          </div>
+        </div>
+        <div class="dur-bar" style="margin-bottom:14px;">
+          <div class="dur-seg" style="width:38%;background:var(--accent-blue);"></div>
+          <div class="dur-seg" style="width:30%;background:var(--accent-purple);"></div>
+          <div class="dur-seg" style="width:20%;background:var(--accent-orange);"></div>
+          <div class="dur-seg" style="width:12%;background:var(--accent-green);"></div>
+        </div>
+
+        <div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:6px;">
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);">
+            <div style="width:4px;height:32px;border-radius:2px;background:var(--accent-blue);flex-shrink:0;"></div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:10px;font-weight:600;font-family:var(--mono);color:var(--text-secondary);">ABC-123</div>
+              <div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Fix image compression pipeline</div>
+            </div>
+            <span style="font-size:14px;font-weight:600;font-family:var(--mono);flex-shrink:0;">2h 30m</span>
+            <span style="font-size:10px;color:var(--text-muted);cursor:pointer;">✏️</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);">
+            <div style="width:4px;height:32px;border-radius:2px;background:var(--accent-purple);flex-shrink:0;"></div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:10px;font-weight:600;font-family:var(--mono);color:var(--text-secondary);">ABC-124</div>
+              <div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Implement offline sync</div>
+            </div>
+            <span style="font-size:14px;font-weight:600;font-family:var(--mono);flex-shrink:0;">1h 55m</span>
+            <span style="font-size:10px;color:var(--text-muted);cursor:pointer;">✏️</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);">
+            <div style="width:4px;height:32px;border-radius:2px;background:var(--accent-orange);flex-shrink:0;"></div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:10px;font-weight:600;font-family:var(--mono);color:var(--text-secondary);">ABC-130 <span style="color:var(--accent-green);font-size:9px;">● LIVE</span></div>
+              <div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Camera UI — manual exposure</div>
+            </div>
+            <span style="font-size:14px;font-weight:600;font-family:var(--mono);color:var(--accent-green);flex-shrink:0;">1h 15m</span>
+            <span style="font-size:10px;color:var(--text-muted);cursor:pointer;">✏️</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);">
+            <div style="width:4px;height:32px;border-radius:2px;background:var(--accent-green);flex-shrink:0;"></div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:10px;font-weight:600;font-family:var(--mono);color:var(--text-secondary);">BID-087</div>
+              <div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">WebSocket real-time bids</div>
+            </div>
+            <span style="font-size:14px;font-weight:600;font-family:var(--mono);flex-shrink:0;">0h 42m</span>
+            <span style="font-size:10px;color:var(--text-muted);cursor:pointer;">✏️</span>
+          </div>
+        </div>
+
+        <div style="padding:4px 14px 16px;display:flex;gap:8px;">
+          <button class="btn-log" style="flex:1;">🚀 Log to Jira</button>
+          <button class="btn-cancel">Export</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ══════════════════════════════════════════════════ -->
+<!-- SECTION 5: LOG FLOW — SELECT                      -->
+<!-- ══════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">5</div>
+    <div class="section-title">Log to Jira — Full Flow</div>
+  </div>
+  <div class="section-desc">Select entries → Edit details → Submit → Result. Supports partial logging — user picks which tasks to log now.</div>
+
+  <div class="panels-row">
+
+    <!-- 5A: SELECT -->
+    <div class="panel-wrapper">
+      <div class="panel-label">5A · Select Entries</div>
+      <div class="panel wide">
+        <div class="p-header">
+          <div class="p-header-left">
+            <div class="back-btn">←</div>
+            <div><div class="p-title">Log to Jira</div><div class="p-sub">FRI, 20 FEB 2026</div></div>
+          </div>
+        </div>
+
+        <div class="summary-bar">
+          <div class="sum-total">
+            <span class="sum-time">4h 30m</span>
+            <span class="sum-label">selected <span class="muted">/ 6h 22m</span></span>
+          </div>
+          <span class="sum-count">2 of 4</span>
+        </div>
+
+        <div class="select-bar">
+          <div class="select-left">
+            <div class="cb-all partial">—</div>
+            <span class="select-label">2 selected</span>
+          </div>
+          <div class="select-links">
+            <a>All</a><span class="sep">·</span><a>None</a><span class="sep">·</span><a>Stopped</a>
+          </div>
+        </div>
+
+        <div class="round-bar">
+          <span class="round-label">⏱ Round to</span>
+          <div class="round-chips"><span class="rc">1m</span><span class="rc active">15m</span><span class="rc">30m</span></div>
+        </div>
+
+        <div class="review-list">
+          <div class="r-item selected">
+            <div class="item-cb">✓</div>
+            <div class="item-body">
+              <div class="r-top"><span class="task-key">ABC-123</span><span class="badge badge-rounded">rounded</span></div>
+              <div class="r-name">Fix image compression pipeline for vehicle inspection</div>
+              <div class="r-meta">
+                <div class="r-dur-group"><span class="r-dur">2h 30m</span><span class="r-dur-orig">2h 27m</span></div>
+                <span class="r-comment has">💬 "Fixed HEIF pipeline..."</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="r-item selected">
+            <div class="item-cb">✓</div>
+            <div class="item-body">
+              <div class="r-top"><span class="task-key">ABC-124</span><span class="badge badge-rounded">rounded</span></div>
+              <div class="r-name">Implement offline sync for bidding module</div>
+              <div class="r-meta">
+                <div class="r-dur-group"><span class="r-dur">2h 00m</span><span class="r-dur-orig">1h 55m</span></div>
+                <span class="r-comment">💬 tap to add</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="r-item deselected">
+            <div class="item-cb"></div>
+            <div class="item-body">
+              <div class="r-top"><span class="task-key">ABC-130</span><span class="badge badge-running"><span class="dot run"></span> running</span></div>
+              <div class="r-name">Camera UI — manual exposure control</div>
+              <div class="r-meta">
+                <div class="r-dur-group"><span class="r-dur">1h 15m</span></div>
+                <span class="r-comment">⏭ skip for now</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="r-item deselected">
+            <div class="item-cb"></div>
+            <div class="item-body">
+              <div class="r-top"><span class="task-key">BID-087</span><span class="badge badge-rounded">rounded</span></div>
+              <div class="r-name">Add WebSocket for real-time bid updates</div>
+              <div class="r-meta">
+                <div class="r-dur-group"><span class="r-dur">0h 45m</span><span class="r-dur-orig">0h 42m</span></div>
+                <span class="r-comment">⏭ skip for now</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout yellow">
+          <span class="callout-icon">💡</span>
+          <div class="callout-text"><strong>ABC-130</strong> is still running. Skipped tasks keep their tracked time for your next log session.</div>
+        </div>
+
+        <div class="panel-footer">
+          <div class="footer-info">
+            <span class="footer-sel"><strong>2</strong> entries · <strong>4h 30m</strong></span>
+            <span class="footer-rem">2 kept for later</span>
+          </div>
+          <div class="footer-btns">
+            <button class="btn-log">🚀 Log Selected (2)</button>
+            <button class="btn-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow">→</div>
+
+    <!-- 5B: EDIT ENTRY -->
+    <div class="panel-wrapper">
+      <div class="panel-label">5B · Edit Entry</div>
+      <div class="panel wide">
+        <div class="p-header">
+          <div class="p-header-left">
+            <div class="back-btn">←</div>
+            <div><div class="p-title">Edit Worklog</div><div class="p-sub">1 OF 2</div></div>
+          </div>
+        </div>
+
+        <div class="edit-task-hdr">
+          <div class="edit-key">ABC-123</div>
+          <div class="edit-name">Fix image compression pipeline for vehicle inspection</div>
+        </div>
+
+        <div class="edit-form">
+          <div class="field">
+            <div class="field-label">Duration <span class="field-hint">tracked: 2h 27m</span></div>
+            <div class="dur-editor">
+              <div class="dur-col"><div class="dur-seg-input">02</div><span class="dur-unit">hrs</span></div>
+              <span class="dur-sep">:</span>
+              <div class="dur-col"><div class="dur-seg-input">30</div><span class="dur-unit">min</span></div>
+              <div class="dur-adj"><div class="adj-btn">▲</div><div class="adj-btn">▼</div></div>
+            </div>
+            <div class="quick-durs">
+              <span class="qd">15m</span><span class="qd">30m</span><span class="qd">1h</span><span class="qd">2h</span><span class="qd active">2h30</span><span class="qd">4h</span>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="field-label">Date</div>
+            <div class="date-row">
+              <div class="date-val">2026-02-20</div>
+              <span class="date-badge">TODAY</span>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="field-label">Time Range</div>
+            <div class="time-range">
+              <span class="tr-val">09:15</span>
+              <span class="tr-sep">→</span>
+              <span class="tr-val">11:45</span>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="field-label">Work Description <span class="field-hint">→ Jira worklog comment</span></div>
+            <div class="comment-area">Fixed HEIF compression pipeline, optimized thumbnail generation for 80+ vehicle photos. Reduced upload size by 40%.</div>
+            <div class="templates">
+              <span class="tpl">🐛 Bug fix</span><span class="tpl">✨ Feature</span><span class="tpl">🔧 Refactor</span><span class="tpl">📝 Review</span><span class="tpl">🔍 Investigation</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="edit-btns">
+          <button class="btn-save">✓ Save Entry</button>
+          <button class="btn-skip">Skip</button>
+          <button class="btn-del">🗑</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SUBMIT + SUCCESS ROW -->
+<div class="section" style="margin-top:-32px;">
+  <div class="panels-row">
+
+    <!-- 5C: SUBMITTING -->
+    <div class="panel-wrapper">
+      <div class="panel-label">5C · Submitting</div>
+      <div class="panel">
+        <div class="p-header">
+          <div class="p-header-left">
+            <div><div class="p-title">Logging to Jira...</div><div class="p-sub">PLEASE WAIT</div></div>
+          </div>
+        </div>
+        <div class="submit-body">
+          <div class="spinner"></div>
+          <div class="submit-text">Submitting worklogs...</div>
+          <div class="prog-list">
+            <div class="prog-item"><span class="prog-icon done">✓</span><div class="prog-info"><div class="prog-key">ABC-123</div></div><span class="prog-dur">2h 30m</span></div>
+            <div class="prog-item"><span class="prog-icon loading">●</span><div class="prog-info"><div class="prog-key">ABC-124</div></div><span class="prog-dur">2h 00m</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow">→</div>
+
+    <!-- 5D: SUCCESS -->
+    <div class="panel-wrapper">
+      <div class="panel-label">5D · Result (Partial)</div>
+      <div class="panel">
+        <div class="success-body">
+          <div class="success-icon">✓</div>
+          <div class="success-title">Logged! 🎉</div>
+          <div class="success-detail">2 worklogs submitted to Jira<br>2 tasks kept for continued tracking</div>
+          <div class="result-list">
+            <div class="res-group">✓ Logged to Jira</div>
+            <div class="res-item"><div class="res-left"><span class="res-icon done">✓</span><span class="res-key">ABC-123</span></div><span class="res-dur">2h 30m</span><span class="res-status logged">logged</span></div>
+            <div class="res-item"><div class="res-left"><span class="res-icon done">✓</span><span class="res-key">ABC-124</span></div><span class="res-dur">2h 00m</span><span class="res-status logged">logged</span></div>
+            <div class="res-group">⏳ Still Tracking</div>
+            <div class="res-item"><div class="res-left"><span class="res-icon run">●</span><span class="res-key muted">ABC-130</span></div><span class="res-dur muted">1h 15m+</span><span class="res-status kept">running</span></div>
+            <div class="res-item"><div class="res-left"><span class="res-icon skip">○</span><span class="res-key muted">BID-087</span></div><span class="res-dur muted">0h 42m</span><span class="res-status kept">kept</span></div>
+          </div>
+        </div>
+        <div class="success-footer">
+          <button class="btn-done">Close</button>
+          <button class="btn-jira">Open Jira ↗</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow">→</div>
+
+    <!-- 5E: ERROR STATE -->
+    <div class="panel-wrapper">
+      <div class="panel-label">5E · Error State</div>
+      <div class="panel">
+        <div class="success-body">
+          <div class="success-icon" style="border-color:var(--accent-orange);background:var(--accent-orange-dim);">⚠</div>
+          <div class="success-title">Partially Logged</div>
+          <div class="success-detail">1 of 2 worklogs submitted<br>1 entry failed — you can retry</div>
+          <div class="result-list">
+            <div class="res-group">✓ Logged</div>
+            <div class="res-item"><div class="res-left"><span class="res-icon done">✓</span><span class="res-key">ABC-123</span></div><span class="res-dur">2h 30m</span><span class="res-status logged">logged</span></div>
+            <div class="res-group">✗ Failed</div>
+            <div class="res-item" style="border-color:rgba(239,87,87,0.3);">
+              <div class="res-left"><span class="res-icon error">✗</span><span class="res-key">ABC-124</span></div>
+              <span class="badge badge-error">403</span>
+              <span class="prog-action">retry</span>
+            </div>
+          </div>
+        </div>
+        <div class="success-footer">
+          <button class="btn-done">Close</button>
+          <button class="btn-jira">Retry Failed</button>
+        </div>
+      </div>
+      <div class="note">
+        <div class="note-title">Error Handling</div>
+        <div class="note-text">
+          <ul>
+            <li><code>401</code> → re-login prompt</li>
+            <li><code>403</code> → no permission, skip</li>
+            <li><code>404</code> → issue deleted, remove</li>
+            <li><code>429</code> → auto-retry with backoff</li>
+            <li><code>5xx</code> → retry up to 3x</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ══════════════════════════════════════════════════ -->
+<!-- SECTION 6: SETTINGS                               -->
+<!-- ══════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">6</div>
+    <div class="section-title">Settings</div>
+  </div>
+  <div class="section-desc">App configuration. Auth management, timer preferences, notification controls.</div>
+
+  <div class="panels-row">
+    <div class="panel-wrapper">
+      <div class="panel-label">Settings Tab</div>
+      <div class="panel">
+        <div class="p-header">
+          <div class="tabs">
+            <div class="tab">Timer</div>
+            <div class="tab">Today</div>
+            <div class="tab active">⚙</div>
+          </div>
+          <div class="avatar">RW</div>
+        </div>
+
+        <div style="padding:14px 14px 8px;">
+          <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);">
+            <div class="avatar" style="width:36px;height:36px;font-size:14px;">RW</div>
+            <div style="flex:1;">
+              <div style="font-size:14px;font-weight:600;">Ricky Wijaya</div>
+              <div style="font-size:11px;color:var(--text-secondary);font-family:var(--mono);">ricky@logique.co.id</div>
+              <div style="font-size:10px;color:var(--text-muted);font-family:var(--mono);">logique.atlassian.com · API Token</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-list">
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-name">Round Durations</div>
+              <div class="setting-desc">Auto-round worklogs before submitting</div>
+            </div>
+            <span class="setting-val">15 min</span>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-name">Idle Detection</div>
+              <div class="setting-desc">Detect AFK and prompt to keep/discard</div>
+            </div>
+            <div class="toggle on"></div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-name">Idle Threshold</div>
+              <div class="setting-desc">Minutes before showing idle prompt</div>
+            </div>
+            <span class="setting-val">5 min</span>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-name">Daily Reminder</div>
+              <div class="setting-desc">Notify if unlogged entries at end of day</div>
+            </div>
+            <div class="toggle on"></div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-name">Reminder Time</div>
+              <div class="setting-desc">When to send the reminder notification</div>
+            </div>
+            <span class="setting-val">17:00</span>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-name">Launch at Login</div>
+              <div class="setting-desc">Start JTT when you log in to your computer</div>
+            </div>
+            <div class="toggle"></div>
+          </div>
+        </div>
+
+        <button class="btn-danger">Disconnect & Logout</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ══════════════════════════════════════════════════ -->
+<!-- SECTION 7: KEYBOARD SHORTCUTS                     -->
+<!-- ══════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">7</div>
+    <div class="section-title">Global Keyboard Shortcuts</div>
+  </div>
+  <div class="section-desc">Work from anywhere without opening the panel. Registered via Tauri global shortcut plugin.</div>
+
+  <div class="shortcuts">
+    <div class="shortcut"><span class="kbd">⌘</span><span class="kbd">⇧</span><span class="kbd">T</span><span class="shortcut-label">Toggle panel</span></div>
+    <div class="shortcut"><span class="kbd">⌘</span><span class="kbd">⇧</span><span class="kbd">P</span><span class="shortcut-label">Pause / Resume</span></div>
+    <div class="shortcut"><span class="kbd">⌘</span><span class="kbd">⇧</span><span class="kbd">L</span><span class="shortcut-label">Log to Jira</span></div>
+    <div class="shortcut"><span class="kbd">⌘</span><span class="kbd">K</span><span class="shortcut-label">Quick search</span></div>
+    <div class="shortcut"><span class="kbd">Esc</span><span class="shortcut-label">Close panel</span></div>
+  </div>
+</div>
+
+</body>
+</html>

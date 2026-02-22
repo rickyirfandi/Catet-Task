@@ -1,0 +1,153 @@
+/* ===== Font Faces ===== */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+/* ===== Design Tokens ===== */
+:root {
+  /* Backgrounds */
+  --bg-body: #08090c;
+  --bg-panel: #14171e;
+  --bg-card: #1b1f2a;
+  --bg-card-hover: #222738;
+  --bg-card-active: #1a2435;
+
+  /* Borders */
+  --border: #2a2f3d;
+  --border-focus: #3d7aed;
+
+  /* Text */
+  --text-primary: #e8ecf4;
+  --text-secondary: #7a8299;
+  --text-muted: #4a5068;
+
+  /* Accents */
+  --accent-blue: #3d7aed;
+  --accent-green: #2dd4a0;
+  --accent-green-dim: rgba(45, 212, 160, 0.1);
+  --accent-orange: #f0993e;
+  --accent-orange-dim: rgba(240, 153, 62, 0.1);
+  --accent-red: #ef5757;
+  --accent-red-dim: rgba(239, 87, 87, 0.1);
+  --accent-purple: #a78bfa;
+  --accent-purple-dim: rgba(167, 139, 250, 0.1);
+  --accent-yellow: #facc15;
+  --accent-yellow-dim: rgba(250, 204, 21, 0.1);
+
+  /* Typography */
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-body: 'Outfit', sans-serif;
+
+  /* Radius */
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+
+/* ===== CSS Reset ===== */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+}
+
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ===== Inputs ===== */
+input,
+textarea,
+select,
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  outline: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+}
+
+/* ===== Utility ===== */
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* ===== Animations ===== */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(45, 212, 160, 0.4);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 0 4px rgba(45, 212, 160, 0);
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
