@@ -1,4 +1,5 @@
 use base64::Engine;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use reqwest::Client;
 use serde_json::json;
 use std::time::Duration;
@@ -128,6 +129,15 @@ impl JiraClient {
     ) -> Result<JiraWorklog, String> {
         let path = format!("/rest/api/3/issue/{}/worklog", issue_key);
 
+        // SQLite stores datetimes as "YYYY-MM-DD HH:MM:SS" (UTC, no timezone suffix).
+        // Jira requires "yyyy-MM-dd'T'HH:mm:ss.SSSZ" (e.g. "2026-02-22T09:15:00.000+0000").
+        let formatted_started = NaiveDateTime::parse_from_str(started, "%Y-%m-%d %H:%M:%S")
+            .map(|dt| {
+                let utc: DateTime<Utc> = dt.and_utc();
+                utc.format("%Y-%m-%dT%H:%M:%S%.3f%z").to_string()
+            })
+            .unwrap_or_else(|_| started.to_string());
+
         let comment_body = if comment.is_empty() {
             None
         } else {
@@ -146,7 +156,7 @@ impl JiraClient {
 
         let payload = WorklogPayload {
             time_spent_seconds,
-            started: started.to_string(),
+            started: formatted_started,
             comment: comment_body,
         };
 
