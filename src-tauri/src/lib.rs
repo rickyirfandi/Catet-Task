@@ -119,7 +119,7 @@ pub fn run() {
                     if let TrayIconEvent::Click { .. } = event {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.as_ref().window().move_window(Position::BottomCenter);
+                            let _ = window.as_ref().window().move_window(Position::TrayBottomCenter);
                             if window.is_visible().unwrap_or(false) {
                                 let _ = window.hide();
                             } else {
