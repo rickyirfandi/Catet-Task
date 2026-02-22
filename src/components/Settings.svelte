@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getUser, logout, getInitials } from '$lib/stores/auth.svelte';
-  import { getSetting, setSetting } from '$lib/api/tauri';
+  import { getSetting, setSetting, setLaunchAtLogin, quitApp, resetTimerData } from '$lib/api/tauri';
   import { onMount } from 'svelte';
 
   let roundDuration = $state(15);
@@ -23,12 +23,33 @@
   }
 
   async function toggleLaunchAtLogin() {
-    launchAtLogin = !launchAtLogin;
-    await setSetting('launch_at_login', String(launchAtLogin));
+    const newValue = !launchAtLogin;
+    launchAtLogin = newValue;
+    try {
+      await setLaunchAtLogin(newValue);
+    } catch {
+      launchAtLogin = !newValue;
+    }
+  }
+
+  let showResetConfirm = $state(false);
+
+  async function handleResetData() {
+    try {
+      await resetTimerData();
+      showResetConfirm = false;
+    } catch {
+      // Error handled silently — entries may already be empty
+      showResetConfirm = false;
+    }
   }
 
   async function handleLogout() {
     await logout();
+  }
+
+  async function handleQuit() {
+    await quitApp();
   }
 
   let user = $derived(getUser());
@@ -100,7 +121,24 @@
     </div>
   </div>
 
+  <button class="btn-reset" onclick={() => showResetConfirm = true}>Reset Data</button>
   <button class="btn-danger" onclick={handleLogout}>Disconnect &amp; Logout</button>
+  <button class="btn-quit" onclick={handleQuit}>Quit JTT</button>
+
+  {#if showResetConfirm}
+    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+    <div class="overlay" onclick={() => showResetConfirm = false}>
+      <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+      <div class="confirm-dialog" role="dialog" aria-label="Reset confirmation" onclick={(e) => e.stopPropagation()}>
+        <div class="confirm-title">Reset All Data?</div>
+        <div class="confirm-body">This will stop any running timer and permanently delete all time entries. Task cache and settings will be kept.</div>
+        <div class="confirm-actions">
+          <button class="confirm-cancel" onclick={() => showResetConfirm = false}>Cancel</button>
+          <button class="confirm-reset" onclick={handleResetData}>Reset</button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -255,6 +293,25 @@
     transform: translateX(18px);
   }
 
+  .btn-reset {
+    margin: 0 14px 10px;
+    background: transparent;
+    border: 1px solid var(--accent-orange);
+    border-radius: var(--radius-sm);
+    padding: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--accent-orange);
+    cursor: pointer;
+    font-family: var(--font-body);
+    width: calc(100% - 28px);
+    text-align: center;
+  }
+
+  .btn-reset:hover {
+    background: rgba(240, 153, 62, 0.08);
+  }
+
   .btn-danger {
     margin: 0 14px 14px;
     background: transparent;
@@ -272,5 +329,98 @@
 
   .btn-danger:hover {
     background: var(--accent-red-dim);
+  }
+
+  .btn-quit {
+    margin: 0 14px 14px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: var(--font-body);
+    width: calc(100% - 28px);
+    text-align: center;
+  }
+
+  .btn-quit:hover {
+    color: var(--text-secondary);
+    border-color: var(--text-muted);
+  }
+
+  .overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+
+  .confirm-dialog {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin: 0 20px;
+    max-width: 300px;
+  }
+
+  .confirm-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .confirm-body {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 18px;
+  }
+
+  .confirm-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  .confirm-cancel {
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-family: var(--font-body);
+    cursor: pointer;
+  }
+
+  .confirm-cancel:hover {
+    border-color: var(--text-muted);
+    color: var(--text-primary);
+  }
+
+  .confirm-reset {
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: var(--accent-red);
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: var(--font-body);
+    cursor: pointer;
+  }
+
+  .confirm-reset:hover {
+    opacity: 0.9;
   }
 </style>

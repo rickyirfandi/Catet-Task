@@ -57,9 +57,19 @@ export const updateEntry = (entryId: number, adjustedSecs: number | null, descri
 export const submitBatchWorklog = (entries: { entryIds: number[]; taskId: string; timeSpentSeconds: number; started: string; comment: string }[]) =>
   invoke<void>('submit_batch_worklog', { entries });
 
+// ── App ──
+export const quitApp = () =>
+  invoke<void>('quit_app');
+
 // ── Settings ──
 export const getSetting = (key: string) =>
   invoke<string | null>('get_setting', { key });
 
 export const setSetting = (key: string, value: string) =>
   invoke<void>('set_setting', { key, value });
+
+export const setLaunchAtLogin = (enabled: boolean) =>
+  invoke<void>('set_launch_at_login', { enabled });
+
+export const resetTimerData = () =>
+  invoke<number>('reset_timer_data');

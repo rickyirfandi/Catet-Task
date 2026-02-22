@@ -6,7 +6,6 @@
   import { getEntries, getAggregatedEntries, refresh } from '$lib/stores/entries.svelte';
   import type { AggregatedEntry } from '$lib/stores/entries.svelte';
   import { getTasks } from '$lib/stores/tasks.svelte';
-  import { getTaskId as getActiveTimerTaskId } from '$lib/stores/timer.svelte';
   import { formatDurationShort, formatDateHeader } from '$lib/utils/time';
   import { roundToNearest } from '$lib/utils/rounding';
   import { submitBatchWorklog } from '$lib/api/tauri';
@@ -24,13 +23,22 @@
   let roundIncrement = $state(15);
   let submitResults = $state<WorklogProgress[]>([]);
   let selectedTaskIds = $state<Set<string>>(new Set());
+  let comments = $state<Record<string, string>>({});
+  let expandedTaskId = $state<string | null>(null);
+
+  function toggleExpand(taskId: string) {
+    expandedTaskId = expandedTaskId === taskId ? null : taskId;
+  }
+
+  function setComment(taskId: string, value: string) {
+    comments = { ...comments, [taskId]: value };
+  }
 
   onMount(() => {
     refresh().then(() => {
-      // Default: select all stopped (non-running) tasks
+      // Select all unsynced tasks (timer is guaranteed stopped before entering LogFlow)
       const agg = getAggregatedEntries().filter(e => !e.isSynced);
-      const stopped = agg.filter(e => !e.isRunning);
-      selectedTaskIds = new Set(stopped.map(e => e.taskId));
+      selectedTaskIds = new Set(agg.map(e => e.taskId));
     });
   });
 
@@ -38,7 +46,6 @@
   let aggEntries = $derived(getAggregatedEntries().filter(e => !e.isSynced));
   let rawEntries = $derived(getEntries());
   let tasks = $derived(getTasks());
-  let activeTimerTaskId = $derived(getActiveTimerTaskId());
   let dateHeader = $derived(formatDateHeader(new Date().toISOString()));
 
   let totalSecs = $derived(aggEntries.reduce((s, e) => s + e.totalSecs, 0));
@@ -91,7 +98,7 @@
         taskId: e.taskId,
         timeSpentSeconds: getRoundedSecs(e),
         started: earliest?.startTime ?? e.latestStartTime,
-        comment: '',
+        comment: comments[e.taskId]?.trim() ?? '',
       };
     });
 
@@ -127,38 +134,23 @@
     <header class="p-header">
       <div class="p-header-left">
         <button class="back-btn" onclick={onclose}>&larr;</button>
-        <div>
-          <div class="p-title">Log to Jira</div>
-          <div class="p-sub">{dateHeader}</div>
-        </div>
+        <span class="p-title">Log to Jira</span>
       </div>
+      <span class="p-date">{dateHeader}</span>
     </header>
 
-    <div class="summary-bar">
-      <div class="sum-total">
-        <span class="sum-time">{formatDurationShort(selectedSecs)}</span>
-        <span class="sum-label">selected <span class="muted">/ {formatDurationShort(totalSecs)}</span></span>
-      </div>
-      <span class="sum-count">{selectedCount} of {aggEntries.length}</span>
-    </div>
-
-    <div class="select-bar">
-      <div class="select-left">
+    <div class="toolbar">
+      <div class="tb-left">
         <Checkbox checked={allSelected} partial={someSelected} onchange={() => allSelected ? doSelectNone() : doSelectAll()} />
-        <span class="select-label">{selectedCount} selected</span>
+        <div class="tb-links">
+          <button class="link" onclick={doSelectAll}>All</button>
+          <span class="sep">&middot;</span>
+          <button class="link" onclick={doSelectNone}>None</button>
+          <span class="sep">&middot;</span>
+          <button class="link" onclick={doSelectStopped}>Stopped</button>
+        </div>
       </div>
-      <div class="select-links">
-        <button class="link" onclick={doSelectAll}>All</button>
-        <span class="sep">&middot;</span>
-        <button class="link" onclick={doSelectNone}>None</button>
-        <span class="sep">&middot;</span>
-        <button class="link" onclick={doSelectStopped}>Stopped</button>
-      </div>
-    </div>
-
-    <div class="round-bar">
-      <span class="round-label">&#9201; Round to</span>
-      <div class="round-chips">
+      <div class="tb-chips">
         {#each [1, 15, 30] as inc}
           <button class="rc" class:active={roundIncrement === inc} onclick={() => roundIncrement = inc}>
             {inc}m
@@ -170,20 +162,22 @@
     <div class="review-list">
       {#each aggEntries as entry (entry.taskId)}
         {@const selected = selectedTaskIds.has(entry.taskId)}
+        {@const expanded = expandedTaskId === entry.taskId}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="r-item" class:selected class:deselected={!selected}>
+        <div class="r-item" class:selected class:deselected={!selected} class:expanded>
           <div class="item-cb-wrap" onclick={() => toggleTask(entry.taskId)}>
             <Checkbox checked={selected} />
           </div>
-          <div class="item-body">
+          <div class="item-body" onclick={() => toggleExpand(entry.taskId)}>
             <div class="r-top">
               <span class="task-key">{entry.taskId}</span>
-              {#if entry.isRunning}
-                <Badge variant="running" />
-              {:else if isRounded(entry)}
-                <Badge variant="rounded" />
-              {/if}
+              <div class="r-top-right">
+                {#if isRounded(entry)}
+                  <Badge variant="rounded" />
+                {/if}
+                <button class="edit-btn" class:has-comment={!!comments[entry.taskId]?.trim()}>&#9998;</button>
+              </div>
             </div>
             <div class="r-name">{taskName(entry.taskId)}</div>
             <div class="r-meta">
@@ -195,31 +189,32 @@
               </div>
               <span class="r-sessions">{entry.entryIds.length} session{entry.entryIds.length > 1 ? 's' : ''}</span>
             </div>
+            {#if comments[entry.taskId]?.trim() && !expanded}
+              <div class="comment-preview">{comments[entry.taskId]}</div>
+            {/if}
           </div>
+          {#if expanded}
+            <!-- svelte-ignore a11y_autofocus -->
+            <div class="comment-wrap" onclick={(e) => e.stopPropagation()}>
+              <textarea
+                class="comment-input"
+                placeholder="Add a worklog comment..."
+                rows="2"
+                autofocus
+                value={comments[entry.taskId] ?? ''}
+                oninput={(e) => setComment(entry.taskId, e.currentTarget.value)}
+              ></textarea>
+            </div>
+          {/if}
         </div>
       {/each}
     </div>
 
-    {#if aggEntries.some(e => e.isRunning)}
-      <div class="callout yellow">
-        <span class="callout-icon">&#128161;</span>
-        <div class="callout-text">
-          <strong>{aggEntries.find(e => e.isRunning)?.taskId}</strong> is still running. Skipped tasks keep their tracked time for your next log session.
-        </div>
-      </div>
-    {/if}
-
     <div class="panel-footer">
-      <div class="footer-info">
-        <span class="footer-sel"><strong>{selectedCount}</strong> tasks &middot; <strong>{formatDurationShort(selectedSecs)}</strong></span>
-        <span class="footer-rem">{aggEntries.length - selectedCount} kept for later</span>
-      </div>
-      <div class="footer-btns">
-        <button class="btn-log" class:disabled={selectedCount === 0} disabled={selectedCount === 0} onclick={handleSubmit}>
-          &#128640; Log Selected ({selectedCount})
-        </button>
-        <button class="btn-cancel" onclick={onclose}>Cancel</button>
-      </div>
+      <button class="btn-log" class:disabled={selectedCount === 0} disabled={selectedCount === 0} onclick={handleSubmit}>
+        Log ({selectedCount}) &middot; {formatDurationShort(selectedSecs)}
+      </button>
+      <button class="btn-cancel" onclick={onclose}>Cancel</button>
     </div>
   </div>
 {/if}
@@ -231,8 +226,9 @@
     height: 100%;
   }
 
+  /* ── Header: single line ── */
   .p-header {
-    padding: 16px 18px 12px;
+    padding: 12px 16px;
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
@@ -246,8 +242,8 @@
   }
 
   .back-btn {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     border-radius: 6px;
     background: var(--bg-card);
     border: 1px solid var(--border);
@@ -255,85 +251,41 @@
     align-items: center;
     justify-content: center;
     color: var(--text-secondary);
-    font-size: 14px;
+    font-size: 13px;
     cursor: pointer;
   }
 
   .p-title {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
   }
 
-  .p-sub {
-    font-size: 11px;
-    color: var(--text-secondary);
-    font-family: var(--font-mono);
-  }
-
-  .summary-bar {
-    padding: 14px 18px;
-    background: var(--bg-card);
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .sum-total {
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
-  }
-
-  .sum-time {
-    font-size: 22px;
-    font-weight: 700;
-    font-family: var(--font-mono);
-  }
-
-  .sum-label {
-    font-size: 11px;
-    color: var(--text-secondary);
-  }
-
-  .sum-label .muted {
+  .p-date {
+    font-size: 10px;
     color: var(--text-muted);
-  }
-
-  .sum-count {
-    font-size: 11px;
-    color: var(--text-secondary);
-    background: var(--bg-panel);
-    padding: 4px 10px;
-    border-radius: 20px;
     font-family: var(--font-mono);
   }
 
-  .select-bar {
-    padding: 10px 18px;
+  /* ── Toolbar: checkbox + links + round chips ── */
+  .toolbar {
+    padding: 8px 16px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     border-bottom: 1px solid var(--border);
+    background: var(--bg-card);
   }
 
-  .select-left {
+  .tb-left {
     display: flex;
     align-items: center;
     gap: 8px;
   }
 
-  .select-label {
-    font-size: 12px;
-    color: var(--text-secondary);
-  }
-
-  .select-links {
+  .tb-links {
     display: flex;
-    gap: 8px;
-    font-size: 11px;
-    font-family: var(--font-mono);
-    font-weight: 500;
+    gap: 6px;
+    align-items: center;
   }
 
   .link {
@@ -341,40 +293,29 @@
     cursor: pointer;
     background: none;
     border: none;
-    font-size: 11px;
+    font-size: 10px;
     font-family: var(--font-mono);
     font-weight: 500;
+    padding: 0;
   }
 
   .sep {
     color: var(--text-muted);
+    font-size: 10px;
   }
 
-  .round-bar {
-    padding: 10px 18px;
+  .tb-chips {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .round-label {
-    font-size: 12px;
-    color: var(--text-secondary);
-  }
-
-  .round-chips {
-    display: flex;
-    gap: 4px;
+    gap: 3px;
   }
 
   .rc {
     font-size: 10px;
     font-weight: 600;
     font-family: var(--font-mono);
-    padding: 4px 10px;
+    padding: 3px 8px;
     border-radius: 4px;
-    background: var(--bg-card);
+    background: var(--bg-panel);
     border: 1px solid var(--border);
     color: var(--text-muted);
     cursor: pointer;
@@ -386,11 +327,12 @@
     color: var(--accent-blue);
   }
 
+  /* ── Task list ── */
   .review-list {
-    padding: 10px 12px;
+    padding: 8px 10px;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 4px;
     flex: 1;
     overflow-y: auto;
   }
@@ -398,10 +340,11 @@
   .r-item {
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 11px 13px;
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
     display: flex;
-    gap: 11px;
+    flex-wrap: wrap;
+    gap: 10px;
     cursor: pointer;
     transition: all 0.15s;
     text-align: left;
@@ -418,11 +361,11 @@
   }
 
   .r-item.deselected {
-    opacity: 0.45;
+    opacity: 0.4;
   }
 
   .r-item.deselected:hover {
-    opacity: 0.7;
+    opacity: 0.65;
   }
 
   .item-cb-wrap {
@@ -439,7 +382,13 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 5px;
+    margin-bottom: 3px;
+  }
+
+  .r-top-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
 
   .task-key {
@@ -450,10 +399,13 @@
   }
 
   .r-name {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
-    line-height: 1.35;
-    margin-bottom: 7px;
+    line-height: 1.3;
+    margin-bottom: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .r-meta {
@@ -470,7 +422,7 @@
   }
 
   .r-dur {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     font-family: var(--font-mono);
   }
@@ -488,68 +440,67 @@
     font-family: var(--font-mono);
   }
 
-  .callout {
-    margin: 0 12px 10px;
-    padding: 11px 13px;
-    border-radius: var(--radius-sm);
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-  }
-
-  .callout.yellow {
-    background: var(--accent-yellow-dim);
-    border: 1px solid rgba(250, 204, 21, 0.2);
-  }
-
-  .callout-icon {
-    font-size: 15px;
-    flex-shrink: 0;
-    margin-top: 1px;
-  }
-
-  .callout-text {
+  /* ── Edit button & comment ── */
+  .edit-btn {
     font-size: 12px;
-    color: var(--text-secondary);
-    line-height: 1.5;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
   }
 
-  .callout-text :global(strong) {
-    color: var(--accent-orange);
-    font-weight: 600;
+  .edit-btn.has-comment {
+    color: var(--accent-blue);
   }
 
-  .panel-footer {
-    border-top: 1px solid var(--border);
-    padding: 14px 18px;
-    background: var(--bg-panel);
+  .r-item.expanded {
+    border-color: rgba(61, 122, 237, 0.4);
   }
 
-  .footer-info {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 10px;
-  }
-
-  .footer-sel {
-    font-size: 12px;
-    color: var(--text-secondary);
-    font-family: var(--font-mono);
-  }
-
-  .footer-sel :global(strong) {
-    color: var(--text-primary);
-    font-weight: 600;
-  }
-
-  .footer-rem {
+  .comment-preview {
     font-size: 11px;
     color: var(--text-muted);
-    font-family: var(--font-mono);
+    font-style: italic;
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .footer-btns {
+  .comment-wrap {
+    width: 100%;
+    padding-left: 0;
+  }
+
+  .comment-input {
+    width: 100%;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 12px;
+    font-family: var(--font-body);
+    padding: 8px 10px;
+    resize: vertical;
+    min-height: 36px;
+    outline: none;
+  }
+
+  .comment-input:focus {
+    border-color: var(--accent-blue);
+  }
+
+  .comment-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  /* ── Footer: single row ── */
+  .panel-footer {
+    border-top: 1px solid var(--border);
+    padding: 10px 16px;
+    background: var(--bg-panel);
     display: flex;
     gap: 8px;
   }
@@ -559,16 +510,13 @@
     background: linear-gradient(135deg, var(--accent-green), #22b88a);
     border: none;
     border-radius: var(--radius-sm);
-    padding: 12px;
+    padding: 11px;
     font-size: 13px;
     font-weight: 600;
     color: #0d0f13;
     cursor: pointer;
-    font-family: var(--font-body);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
+    font-family: var(--font-mono);
+    text-align: center;
     box-shadow: 0 4px 16px rgba(45, 212, 160, 0.2);
   }
 
@@ -582,7 +530,7 @@
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    padding: 12px 16px;
+    padding: 11px 16px;
     font-size: 13px;
     font-weight: 500;
     color: var(--text-secondary);

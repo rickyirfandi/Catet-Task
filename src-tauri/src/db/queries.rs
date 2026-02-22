@@ -192,6 +192,28 @@ pub async fn mark_entry_synced(pool: &SqlitePool, id: i64, worklog_id: &str) -> 
     Ok(())
 }
 
+// ── Orphaned entry recovery ──
+
+/// Finalize any entries with NULL end_time (crash recovery).
+/// Sets end_time to now and computes duration_secs from start_time.
+pub async fn finalize_orphaned_entries(pool: &SqlitePool) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        "UPDATE time_entries SET end_time = datetime('now'), \
+         duration_secs = CAST((julianday('now') - julianday(start_time)) * 86400 AS INTEGER) \
+         WHERE end_time IS NULL"
+    )
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
+}
+
+pub async fn delete_all_entries(pool: &SqlitePool) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query("DELETE FROM time_entries")
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected())
+}
+
 // ── Settings queries ──
 
 pub async fn get_setting(pool: &SqlitePool, key: &str) -> Result<Option<String>, sqlx::Error> {

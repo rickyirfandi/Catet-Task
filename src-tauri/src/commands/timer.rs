@@ -115,3 +115,26 @@ pub async fn update_entry(
         .await
         .map_err(|e| format!("Failed to update entry: {}", e))
 }
+
+#[tauri::command]
+pub async fn quit_app(
+    engine_state: State<'_, Arc<Mutex<TimerEngine>>>,
+    pool: State<'_, SqlitePool>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    // Stop running timer gracefully
+    let stopped = {
+        let mut engine = engine_state.lock().unwrap();
+        engine.stop()
+    };
+
+    // Finalize DB entry if timer was active
+    if let Some(entry) = stopped {
+        if let Ok(Some(running)) = queries::get_running_entry_for_task(&pool, &entry.task_id).await {
+            let _ = queries::finalize_entry(&pool, running.id, entry.duration_secs as i64).await;
+        }
+    }
+
+    app.exit(0);
+    Ok(())
+}
