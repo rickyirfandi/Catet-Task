@@ -3,21 +3,40 @@ mod db;
 mod jira;
 mod timer;
 
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc, Mutex,
+};
+use std::time::{SystemTime, UNIX_EPOCH};
 use sqlx::SqlitePool;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::TrayIconEvent,
-    Manager,
+    Manager, WindowEvent,
 };
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_positioner::{Position, WindowExt};
+
+fn now_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
 
 pub fn run() {
     let jira_client: Arc<Mutex<Option<jira::client::JiraClient>>> =
         Arc::new(Mutex::new(None));
     let timer_engine: Arc<Mutex<timer::engine::TimerEngine>> =
         Arc::new(Mutex::new(timer::engine::TimerEngine::new()));
+
+    // Shared timestamp to detect blur-hide → tray-click race condition.
+    // When clicking the tray icon while the panel is open, the blur event
+    // fires first (hiding the panel), then the tray click fires. Without
+    // this guard the tray click would immediately re-show the panel.
+    let last_blur_hide = Arc::new(AtomicU64::new(0));
+    let blur_ts_for_window = last_blur_hide.clone();
+    let blur_ts_for_tray = last_blur_hide;
 
     tauri::Builder::default()
         .plugin(tauri_plugin_positioner::init())
@@ -56,7 +75,17 @@ pub fn run() {
             commands::settings::set_launch_at_login,
             commands::settings::reset_timer_data,
         ])
-        .setup(|app| {
+        // Auto-dismiss panel when it loses focus (click outside → hide),
+        // exactly like CleanMyMac's tray popover.
+        .on_window_event(move |window, event| {
+            if window.label() == "main" {
+                if let WindowEvent::Focused(false) = event {
+                    let _ = window.hide();
+                    blur_ts_for_window.store(now_millis(), Ordering::SeqCst);
+                }
+            }
+        })
+        .setup(move |app| {
             // Initialize SQLite database
             let app_dir = app.path().app_config_dir().expect("Failed to get app config dir");
             std::fs::create_dir_all(&app_dir).expect("Failed to create app config dir");
@@ -114,17 +143,28 @@ pub fn run() {
             if let Some(tray) = app.tray_by_id("main-tray") {
                 tray.set_menu(Some(menu)).expect("Failed to set tray menu");
 
-                // Handle left-click: toggle panel
-                tray.on_tray_icon_event(|tray, event| {
+                // Handle left-click: toggle panel below tray icon
+                let blur_ts = blur_ts_for_tray.clone();
+                tray.on_tray_icon_event(move |tray, event| {
                     if let TrayIconEvent::Click { .. } = event {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.as_ref().window().move_window(Position::BottomCenter);
+                            // Position directly below the tray icon (like CleanMyMac)
+                            let _ = window.as_ref().window().move_window(Position::TrayBottomCenter);
+
                             if window.is_visible().unwrap_or(false) {
                                 let _ = window.hide();
                             } else {
-                                let _ = window.show();
-                                let _ = window.set_focus();
+                                // Skip re-show if the panel was just hidden by a blur event
+                                // (the blur fires before the tray click when clicking the
+                                // tray icon to dismiss).
+                                let since_blur = now_millis().saturating_sub(
+                                    blur_ts.load(Ordering::SeqCst),
+                                );
+                                if since_blur > 300 {
+                                    let _ = window.show();
+                                    let _ = window.set_focus();
+                                }
                             }
                         }
                     }

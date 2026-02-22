@@ -176,7 +176,7 @@ pub fn start_tick_loop(app: AppHandle, engine: Arc<Mutex<TimerEngine>>) {
                     "running" => {
                         let task_id = payload.task_id.as_deref().unwrap_or("?");
                         let elapsed = format_elapsed(payload.elapsed_secs);
-                        format!("{} \u{00B7} {}", task_id, elapsed)
+                        format!("\u{25CF} {} \u{00B7} {}", task_id, elapsed)
                     }
                     "paused" => {
                         let task_id = payload.task_id.as_deref().unwrap_or("?");
