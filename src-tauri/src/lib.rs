@@ -12,7 +12,7 @@ use sqlx::SqlitePool;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::TrayIconEvent,
-    Manager, WindowEvent,
+    Manager, RunEvent, WindowEvent,
 };
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_positioner::{Position, WindowExt};
@@ -210,6 +210,13 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, event| {
+            // Prevent the app from exiting when the last window is hidden.
+            // Essential for tray-only apps on macOS.
+            if let RunEvent::ExitRequested { api, .. } = event {
+                api.prevent_exit();
+            }
+        });
 }

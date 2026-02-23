@@ -15,7 +15,7 @@
       "id": "main-tray",
       "iconPath": "icons/icon.png",
       "iconAsTemplate": true,
-      "title": "⏱ JTT"
+      "title": ""
     },
     "windows": [
       {
@@ -49,7 +49,8 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "minimumSystemVersion": "10.15"
+      "minimumSystemVersion": "10.15",
+      "infoPlist": "Info.plist"
     }
   }
 }

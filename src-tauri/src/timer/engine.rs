@@ -162,8 +162,10 @@ impl TimerEngine {
 pub fn start_tick_loop(app: AppHandle, engine: Arc<Mutex<TimerEngine>>) {
     tauri::async_runtime::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
+        let mut tick_count: u64 = 0;
         loop {
             interval.tick().await;
+            tick_count += 1;
 
             let payload = {
                 let engine = engine.lock().unwrap();
@@ -176,14 +178,17 @@ pub fn start_tick_loop(app: AppHandle, engine: Arc<Mutex<TimerEngine>>) {
                     "running" => {
                         let task_id = payload.task_id.as_deref().unwrap_or("?");
                         let elapsed = format_elapsed(payload.elapsed_secs);
-                        format!("\u{25CF} {} \u{00B7} {}", task_id, elapsed)
+                        // Alternate ● and ○ every second for a pulse effect
+                        let dot = if tick_count % 2 == 0 { "\u{25CF}" } else { "\u{25CB}" };
+                        format!("{} {} \u{00B7} {}", dot, task_id, elapsed)
                     }
                     "paused" => {
                         let task_id = payload.task_id.as_deref().unwrap_or("?");
                         let elapsed = format_elapsed(payload.elapsed_secs);
                         format!("{} \u{00B7} {} \u{23F8}", task_id, elapsed)
                     }
-                    _ => "\u{23F1} JTT".to_string(),
+                    // Idle: no text, just the tray icon
+                    _ => String::new(),
                 };
                 let _ = tray.set_title(Some(&title));
             }
