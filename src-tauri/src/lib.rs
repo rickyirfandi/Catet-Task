@@ -75,13 +75,23 @@ pub fn run() {
             commands::settings::set_launch_at_login,
             commands::settings::reset_timer_data,
         ])
-        // Auto-dismiss panel when it loses focus (click outside → hide),
-        // exactly like CleanMyMac's tray popover.
+        // Window event handling for the tray-only panel:
+        // 1. CloseRequested → hide instead of destroy (keeps the app alive)
+        // 2. Focused(false) → auto-dismiss like CleanMyMac's tray popover
         .on_window_event(move |window, event| {
             if window.label() == "main" {
-                if let WindowEvent::Focused(false) = event {
-                    let _ = window.hide();
-                    blur_ts_for_window.store(now_millis(), Ordering::SeqCst);
+                match event {
+                    WindowEvent::CloseRequested { api, .. } => {
+                        // Never destroy the window — just hide it.
+                        // Without this, macOS closes the window and the app exits.
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
+                    WindowEvent::Focused(false) => {
+                        let _ = window.hide();
+                        blur_ts_for_window.store(now_millis(), Ordering::SeqCst);
+                    }
+                    _ => {}
                 }
             }
         })
@@ -198,9 +208,11 @@ pub fn run() {
                 });
             }
 
-            // Hide the main window on startup — it's toggled by tray click
+            // Show the panel on startup, positioned below the tray icon
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.hide();
+                let _ = window.as_ref().window().move_window(Position::TrayBottomCenter);
+                let _ = window.show();
+                let _ = window.set_focus();
             }
 
             // Start the timer tick loop

@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegui-org/nicegui/main/.github/tauri-v2-schema.json",
   "productName": "Jira TimeTracker",
-  "version": "0.1.0",
+  "version": "0.0.4",
   "identifier": "com.jtt.app",
   "build": {
     "frontendDist": "../dist",
@@ -25,7 +25,7 @@
         "height": 520,
         "resizable": false,
         "decorations": false,
-        "visible": false,
+        "visible": true,
         "skipTaskbar": true,
         "alwaysOnTop": true,
         "transparent": false
