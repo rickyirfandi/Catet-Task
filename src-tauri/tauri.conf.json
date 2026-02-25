@@ -35,9 +35,7 @@
       "csp": null
     }
   },
-  "plugins": {
-    "positioner": {}
-  },
+  "plugins": {},
   "bundle": {
     "active": true,
     "targets": "all",
