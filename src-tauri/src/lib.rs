@@ -147,11 +147,17 @@ pub fn run() {
             }
             eprintln!("[CT] setup: autostart synced");
 
-            // Build tray right-click menu with Quit item
+            // Build tray right-click menu with disabled app label + separator + Quit
+            let app_label = MenuItemBuilder::with_id("app-label", "Catet Task")
+                .enabled(false)
+                .build(app)
+                .expect("Failed to build app label");
             let quit_item = MenuItemBuilder::with_id("quit", "Quit Catet Task")
                 .build(app)
                 .expect("Failed to build quit menu item");
             let menu = MenuBuilder::new(app)
+                .item(&app_label)
+                .separator()
                 .item(&quit_item)
                 .build()
                 .expect("Failed to build tray menu");
