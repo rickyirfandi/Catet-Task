@@ -69,7 +69,7 @@ Source: `src-tauri/src/lib.rs`
 
 ## Credential Storage
 
-- API token stored in OS Keychain via `keyring` crate (service: `jira-timetracker`)
+- API token stored in OS Keychain via `keyring` crate (service: `catet-task`)
 - Never stored in SQLite, localStorage, or config files
 - Auth header constructed in Rust memory only (`Basic base64(email:token)`)
 - Cleared from keychain on logout

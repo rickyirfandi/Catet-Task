@@ -16,16 +16,16 @@ export function isPaused() { return status === 'paused'; }
 let unlisten: (() => void) | null = null;
 
 export async function init() {
-  console.log('[JTT] timer init() called');
+  console.log('[CT] timer init() called');
   // Fetch current state
   try {
     const state = await getActiveTimer();
-    console.log('[JTT] initial timer state:', JSON.stringify(state));
+    console.log('[CT] initial timer state:', JSON.stringify(state));
     status = state.status;
     taskId = state.taskId;
     elapsedSecs = state.elapsedSecs;
   } catch (e) {
-    console.error('[JTT] getActiveTimer failed:', e);
+    console.error('[CT] getActiveTimer failed:', e);
   }
 
   // Listen for tick events
@@ -36,10 +36,10 @@ export async function init() {
     taskId = event.payload.task_id;
     elapsedSecs = event.payload.elapsed_secs;
     if (prev !== status || (status !== 'idle' && elapsedSecs % 10 === 0)) {
-      console.log('[JTT] tick:', status, taskId, elapsedSecs);
+      console.log('[CT] tick:', status, taskId, elapsedSecs);
     }
   });
-  console.log('[JTT] timer event listener registered');
+  console.log('[CT] timer event listener registered');
 }
 
 export async function toggle(id: string) {
@@ -54,7 +54,7 @@ export async function toggle(id: string) {
       await refreshEntries();
     }
   } catch (e) {
-    console.error('[JTT] Timer toggle failed:', e);
+    console.error('[CT] Timer toggle failed:', e);
   }
 }
 

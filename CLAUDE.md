@@ -1,8 +1,8 @@
-# CLAUDE.md — Jira TimeTracker (JTT)
+# CLAUDE.md — Catet Task
 
 ## Project Overview
 
-Jira TimeTracker is a **menu bar / system tray application** for tracking time on Jira tasks. Built with **Rust (Tauri v2)** backend and **Svelte 5** frontend. The app lives in the system tray, shows the active task + elapsed time (e.g., `● ABC-123 · 00:34:12`), and lets users batch-submit worklogs to Jira.
+Catet Task is a **menu bar / system tray application** for tracking time on Jira tasks. Built with **Rust (Tauri v2)** backend and **Svelte 5** frontend. The app lives in the system tray, shows the active task + elapsed time (e.g., `● ABC-123 · 00:34:12`), and lets users batch-submit worklogs to Jira.
 
 **Key docs:**
 - `docs/PRD.docx` — Full product requirements document
@@ -18,7 +18,7 @@ Jira TimeTracker is a **menu bar / system tray application** for tracking time o
 | Backend | Rust | 2024 edition |
 | Frontend | Svelte | 5 (Runes) |
 | Bundler | Vite | latest |
-| Local DB | SQLite | via `tauri-plugin-sql` |
+| Local DB | SQLite | via sqlx (direct) |
 | HTTP | reqwest | latest (async, json, rustls-tls) |
 | Credentials | keyring | latest |
 | Tray | tauri built-in | `tray-icon` feature |
@@ -31,7 +31,7 @@ Jira TimeTracker is a **menu bar / system tray application** for tracking time o
 ## Project Structure
 
 ```
-jira-timetracker/
+catet-task/
 ├── CLAUDE.md                    # ← You are here
 ├── README.md
 ├── package.json
@@ -228,9 +228,9 @@ match timer_state {
     Idle => {
         let unlogged = db.count_unlogged_today();
         if unlogged > 0 {
-            tray.set_title(format!("⏱ JTT · {} unlogged", unlogged));
+            tray.set_title(format!("⏱ CT · {} unlogged", unlogged));
         } else {
-            tray.set_title("⏱ JTT");
+            tray.set_title("⏱ CT");
         }
     },
     Running { task_id, start_time, .. } => {
@@ -438,11 +438,11 @@ cargo clippy                     # Lint
 cargo fmt                        # Format
 
 # ── Database (debug) ──
-# macOS:  ~/Library/Application Support/com.jtt.app/jtt.db
-# Linux:  ~/.local/share/com.jtt.app/jtt.db
-# Windows: %APPDATA%/com.jtt.app/jtt.db
-sqlite3 <path>/jtt.db ".tables"
-sqlite3 <path>/jtt.db "SELECT * FROM time_entries WHERE date(start_time) = date('now');"
+# macOS:  ~/Library/Application Support/id.rickyirfandi.catettask/catet-task.db
+# Linux:  ~/.local/share/id.rickyirfandi.catettask/catet-task.db
+# Windows: %APPDATA%/id.rickyirfandi.catettask/catet-task.db
+sqlite3 <path>/catet-task.db ".tables"
+sqlite3 <path>/catet-task.db "SELECT * FROM time_entries WHERE date(start_time) = date('now');"
 ```
 
 ---

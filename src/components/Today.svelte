@@ -113,7 +113,7 @@
     const today = new Date().toISOString().slice(0, 10);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `jtt-export-${today}.csv`;
+    a.download = `ct-export-${today}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     flashExportDone('Downloaded!');

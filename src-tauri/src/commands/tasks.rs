@@ -31,7 +31,7 @@ pub async fn fetch_my_tasks(
     };
 
     let result = client.search_issues(DEFAULT_JQL).await.map_err(|e| {
-        eprintln!("[JTT] fetch_my_tasks JQL error: {}", e);
+        eprintln!("[CT] fetch_my_tasks JQL error: {}", e);
         e
     })?;
 

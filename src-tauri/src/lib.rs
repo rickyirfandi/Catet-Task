@@ -96,32 +96,32 @@ pub fn run() {
             }
         })
         .setup(move |app| {
-            eprintln!("[JTT] setup: start");
+            eprintln!("[CT] setup: start");
 
             // Initialize SQLite database
             let app_dir = app.path().app_config_dir().expect("Failed to get app config dir");
             std::fs::create_dir_all(&app_dir).expect("Failed to create app config dir");
-            let db_path = app_dir.join("jtt.db");
+            let db_path = app_dir.join("catet-task.db");
             let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
-            eprintln!("[JTT] setup: db_url={}", db_url);
+            eprintln!("[CT] setup: db_url={}", db_url);
 
             let pool = tauri::async_runtime::block_on(async {
                 let pool = SqlitePool::connect(&db_url)
                     .await
                     .expect("Failed to connect to database");
-                eprintln!("[JTT] setup: db connected");
+                eprintln!("[CT] setup: db connected");
                 db::queries::init_db(&pool)
                     .await
                     .expect("Failed to initialize database");
-                eprintln!("[JTT] setup: db initialized");
+                eprintln!("[CT] setup: db initialized");
 
                 // Recover orphaned entries (crash recovery)
                 match db::queries::finalize_orphaned_entries(&pool).await {
                     Ok(count) if count > 0 => {
-                        eprintln!("[JTT] setup: recovered {} orphaned entries", count);
+                        eprintln!("[CT] setup: recovered {} orphaned entries", count);
                     }
                     Err(e) => {
-                        eprintln!("[JTT] setup: orphan recovery failed: {}", e);
+                        eprintln!("[CT] setup: orphan recovery failed: {}", e);
                     }
                     _ => {}
                 }
@@ -130,7 +130,7 @@ pub fn run() {
             });
 
             app.manage(pool.clone());
-            eprintln!("[JTT] setup: pool managed");
+            eprintln!("[CT] setup: pool managed");
 
             // Sync autostart state with saved preference
             let autostart = app.handle().autolaunch();
@@ -145,27 +145,32 @@ pub fn run() {
                     let _ = autostart.disable();
                 }
             }
-            eprintln!("[JTT] setup: autostart synced");
+            eprintln!("[CT] setup: autostart synced");
 
             // Build tray right-click menu with Quit item
-            let quit_item = MenuItemBuilder::with_id("quit", "Quit JTT")
+            let quit_item = MenuItemBuilder::with_id("quit", "Quit Catet Task")
                 .build(app)
                 .expect("Failed to build quit menu item");
             let menu = MenuBuilder::new(app)
                 .item(&quit_item)
                 .build()
                 .expect("Failed to build tray menu");
-            eprintln!("[JTT] setup: tray menu built");
+            eprintln!("[CT] setup: tray menu built");
 
             // Get the tray icon created from tauri.conf.json and attach the menu
             if let Some(tray) = app.tray_by_id("main-tray") {
                 tray.set_menu(Some(menu)).expect("Failed to set tray menu");
-                eprintln!("[JTT] setup: tray menu attached");
+                eprintln!("[CT] setup: tray menu attached");
 
                 // Handle left-click: toggle panel below tray icon
                 let blur_ts = blur_ts_for_tray.clone();
                 tray.on_tray_icon_event(move |tray, event| {
-                    if let TrayIconEvent::Click { .. } = event {
+                    let is_left_click = matches!(
+                        event,
+                        TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, .. }
+                            | TrayIconEvent::DoubleClick { button: tauri::tray::MouseButton::Left, .. }
+                    );
+                    if is_left_click {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
                             // Position directly below the tray icon (like CleanMyMac)
@@ -216,29 +221,29 @@ pub fn run() {
                     }
                 });
             } else {
-                eprintln!("[JTT] setup: WARNING - tray icon 'main-tray' not found!");
+                eprintln!("[CT] setup: WARNING - tray icon 'main-tray' not found!");
             }
 
             // Show the panel on startup, positioned top-right
             // (avoid TrayBottomCenter here — tray icon may not be fully registered yet)
-            eprintln!("[JTT] setup: about to show window");
+            eprintln!("[CT] setup: about to show window");
             if let Some(window) = app.get_webview_window("main") {
-                eprintln!("[JTT] setup: got window, positioning top-right...");
+                eprintln!("[CT] setup: got window, positioning top-right...");
                 let pos_result = window.as_ref().window().move_window(Position::TopRight);
-                eprintln!("[JTT] setup: move_window result: {:?}", pos_result);
+                eprintln!("[CT] setup: move_window result: {:?}", pos_result);
                 let show_result = window.show();
-                eprintln!("[JTT] setup: show result: {:?}", show_result);
+                eprintln!("[CT] setup: show result: {:?}", show_result);
                 let focus_result = window.set_focus();
-                eprintln!("[JTT] setup: set_focus result: {:?}", focus_result);
+                eprintln!("[CT] setup: set_focus result: {:?}", focus_result);
             } else {
-                eprintln!("[JTT] setup: WARNING - window 'main' not found!");
+                eprintln!("[CT] setup: WARNING - window 'main' not found!");
             }
 
             // Start the timer tick loop
             let app_handle = app.handle().clone();
             let engine = app.state::<Arc<Mutex<timer::engine::TimerEngine>>>().inner().clone();
             timer::engine::start_tick_loop(app_handle, engine);
-            eprintln!("[JTT] setup: tick loop started, setup complete");
+            eprintln!("[CT] setup: tick loop started, setup complete");
 
             Ok(())
         })

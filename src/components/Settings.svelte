@@ -115,7 +115,7 @@
     <div class="setting-item">
       <div class="setting-info">
         <div class="setting-name">Launch at Login</div>
-        <div class="setting-desc">Start JTT when you log in to your computer</div>
+        <div class="setting-desc">Start Catet Task when you log in to your computer</div>
       </div>
       <button class="toggle" class:on={launchAtLogin} onclick={toggleLaunchAtLogin}></button>
     </div>
@@ -123,7 +123,7 @@
 
   <button class="btn-reset" onclick={() => showResetConfirm = true}>Reset Data</button>
   <button class="btn-danger" onclick={handleLogout}>Disconnect &amp; Logout</button>
-  <button class="btn-quit" onclick={handleQuit}>Quit JTT</button>
+  <button class="btn-quit" onclick={handleQuit}>Quit Catet Task</button>
 
   {#if showResetConfirm}
     <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->

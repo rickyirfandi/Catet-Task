@@ -1,8 +1,8 @@
 [package]
-name = "jira-timetracker"
+name = "catet-task"
 version = "0.0.4"
 edition = "2021"
-description = "Jira TimeTracker - Menu bar time tracking app"
+description = "Catet Task - Menu bar time tracking app"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

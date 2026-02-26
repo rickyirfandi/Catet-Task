@@ -1,7 +1,7 @@
 ﻿
 
 
-**Jira TimeTracker**
+**Catet Task**
 
 Product Requirements Document
 
@@ -41,13 +41,13 @@ Author: Ricky Wijaya
 
 
 # **1. Overview**
-Jira TimeTracker (JTT) is a lightweight menu bar application that lives in the system tray and provides seamless time tracking for Jira tasks. Users can start/stop timers per task, switch between tasks with automatic timer management, and batch-submit worklogs to Jira at the end of the day — all without leaving their workflow.
+Catet Task is a lightweight menu bar application that lives in the system tray and provides seamless time tracking for Jira tasks. Users can start/stop timers per task, switch between tasks with automatic timer management, and batch-submit worklogs to Jira at the end of the day — all without leaving their workflow.
 
 The app is built with Rust (Tauri v2) for the backend and Svelte 5 for the frontend, ensuring a native-feeling experience with minimal resource usage. The system tray shows the currently active task and elapsed time in real-time (e.g., "ABC-123 · 00:34:12").
 
 |**Attribute**|**Detail**|
 | :- | :- |
-|**App Name**|Jira TimeTracker (JTT)|
+|**App Name**|Catet Task|
 |**Type**|System Tray / Menu Bar Application|
 |**Platforms**|macOS (primary), Windows, Linux|
 |**Backend**|Rust (Tauri v2)|
@@ -63,7 +63,7 @@ Developers and team members who use Jira often struggle with accurate time loggi
 - The friction of opening Jira in a browser, navigating to the issue, and manually entering worklog data.
 - Guessing time allocation after the fact, leading to unreliable project metrics.
 
-JTT solves this by making time tracking effortless — always visible in the menu bar, one-click task switching, and batch worklog submission with comment support.
+Catet Task solves this by making time tracking effortless — always visible in the menu bar, one-click task switching, and batch worklog submission with comment support.
 # **3. Target User**
 The primary user is a developer or team member who uses Jira daily and needs to log time per task. They value speed, minimal disruption, and accuracy.
 
@@ -138,7 +138,7 @@ The application follows a clean separation between the Rust backend (Tauri comma
 |**Personal Access Token**|Jira Server/DC|Bearer token for self-hosted Jira instances.|Phase 2|
 
 ## **6.2 MVP Auth Flow (API Token)**
-1. User opens JTT for the first time → Login screen appears.
+1. User opens Catet Task for the first time → Login screen appears.
 1. User inputs: Jira Domain, Email, API Token.
 1. App calls GET /rest/api/3/myself to verify credentials.
 1. On success: credentials stored in OS Keychain (via keyring crate), user info cached in SQLite.
@@ -147,7 +147,7 @@ The application follows a clean separation between the Rust backend (Tauri comma
 ## **6.3 Credential Security**
 - API tokens are NEVER stored in plain text or in SQLite.
 - OS Keychain provides hardware-backed encryption on macOS (Secure Enclave).
-- Credentials are identified by a service name ("jira-timetracker") and account (user email).
+- Credentials are identified by a service name ("catet-task") and account (user email).
 - Logout action deletes credentials from Keychain and clears cached user data.
 # **7. Core Features (MVP)**
 ## **7.1 System Tray Integration**
@@ -155,10 +155,10 @@ The system tray is the primary interface. It shows the app state at a glance wit
 
 |**State**|**Tray Display**|**Icon**|
 | :- | :- | :- |
-|**Idle (no timer)**|⏱ JTT|Default icon, gray dot|
+|**Idle (no timer)**|⏱ Catet Task|Default icon, gray dot|
 |**Timer running**|ABC-123 · 00:34:12|Green pulsing dot|
 |**Timer paused**|ABC-123 · 00:34:12 ⏸|Orange blinking dot|
-|**Unsynced entries**|⏱ JTT · 3 unlogged|Default icon with badge|
+|**Unsynced entries**|⏱ Catet Task · 3 unlogged|Default icon with badge|
 
 The tray title updates every second when a timer is running. This is achieved by a Rust-side interval that calls tray.set\_title() with the formatted string. Clicking the tray icon toggles the panel window positioned directly below the icon.
 ## **7.2 Task Management**
@@ -416,7 +416,7 @@ These features are planned for after MVP launch, prioritized by user value:
 |**Week 7**|Testing & Release|End-to-end testing, edge cases, macOS notarization, build pipeline, v0.1.0 release|
 
 ## **12.2 Project Structure**
-jira-timetracker/\
+catet-task/\
 ├── src-tauri/\
 │   ├── Cargo.toml\
 │   ├── tauri.conf.json\
@@ -479,7 +479,7 @@ jira-timetracker/\
 
 |**Metric**|**Target**|**How to Measure**|
 | :- | :- | :- |
-|**Daily Active Usage**|Use JTT every workday|Local analytics: app open events|
+|**Daily Active Usage**|Use Catet Task every workday|Local analytics: app open events|
 |**Log Accuracy**|> 90% of work hours logged|Compare tracked time vs expected hours|
 |**Time to Log**|< 30 seconds for full day|Measure from "Log to Jira" click to success|
 |**Timer Coverage**|> 80% of work time tracked|Total tracked / total work hours|

@@ -14,7 +14,7 @@
     "trayIcon": {
       "id": "main-tray",
       "iconPath": "icons/icon.png",
-      "iconAsTemplate": true,
+      "iconAsTemplate": false,
       "title": ""
     },
     "windows": [

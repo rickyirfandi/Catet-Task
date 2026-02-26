@@ -3,7 +3,7 @@ use crate::jira::models::AppUser;
 use std::sync::{Arc, Mutex};
 use tauri::State;
 
-const KEYRING_SERVICE: &str = "jira-timetracker";
+const KEYRING_SERVICE: &str = "catet-task";
 const KEYRING_USER: &str = "credentials";
 
 #[tauri::command]
