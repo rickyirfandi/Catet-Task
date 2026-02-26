@@ -29,7 +29,6 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      # ✅ NEW: Import your Developer ID cert into a temp keychain
       - name: Import Apple Certificate
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -71,7 +70,24 @@ jobs:
         with:
           args: --target aarch64-apple-darwin
 
-      # ✅ NEW: Always clean up the temp keychain
+      - name: Notarize DMG
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          DMG=$(find src-tauri/target/aarch64-apple-darwin/release/bundle/dmg -name "*.dmg" | head -1)
+          echo "Signing DMG: $DMG"
+          codesign --force --sign "$APPLE_SIGNING_IDENTITY" "$DMG"
+          echo "Submitting DMG for notarization..."
+          xcrun notarytool submit "$DMG" \
+            --key /tmp/AuthKey.p8 \
+            --key-id "$APPLE_API_KEY" \
+            --issuer "$APPLE_API_ISSUER" \
+            --wait
+          echo "Stapling notarization ticket..."
+          xcrun stapler staple "$DMG"
+
       - name: Cleanup keychain
         if: always()
         run: security delete-keychain $RUNNER_TEMP/build.keychain || true

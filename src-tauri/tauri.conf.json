@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegui-org/nicegui/main/.github/tauri-v2-schema.json",
-  "productName": "Jira TimeTracker",
+  "productName": "Catet Task",
   "version": "0.0.4",
-  "identifier": "com.jtt.app",
+  "identifier": "id.rickyirfandi.catettask",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -20,7 +20,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Jira TimeTracker",
+        "title": "Catet Task",
         "width": 340,
         "height": 520,
         "resizable": false,
