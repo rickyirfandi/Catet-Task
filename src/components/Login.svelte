@@ -1,5 +1,6 @@
 <script lang="ts">
   import { login, getLoading, getError } from '$lib/stores/auth.svelte';
+  import appIcon from '../assets/app-icon.png';
 
   let domain = $state('');
   let email = $state('');
@@ -21,7 +22,7 @@
 
 <div class="login">
   <div class="login-header">
-    <div class="login-logo">JT</div>
+    <img class="login-logo" src={appIcon} alt="Catet Task" />
     <div class="login-title">Connect to Jira</div>
     <div class="login-desc">Track time, log work, stay in flow.</div>
   </div>
@@ -88,16 +89,8 @@
     width: 48px;
     height: 48px;
     border-radius: 14px;
-    background: linear-gradient(135deg, var(--accent-blue), #6366f1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
     margin: 0 auto 14px;
-    font-size: 22px;
-    font-weight: 700;
-    color: white;
-    font-family: var(--font-mono);
-    box-shadow: 0 6px 24px rgba(61, 122, 237, 0.3);
+    object-fit: contain;
   }
 
   .login-title {

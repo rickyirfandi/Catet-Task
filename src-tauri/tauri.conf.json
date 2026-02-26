@@ -15,6 +15,7 @@
       "id": "main-tray",
       "iconPath": "icons/icon.png",
       "iconAsTemplate": false,
+      "showMenuOnLeftClick": false,
       "title": ""
     },
     "windows": [

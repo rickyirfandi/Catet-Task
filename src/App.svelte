@@ -2,6 +2,7 @@
   import { isLoggedIn, tryAutoLogin, getLoading as getAuthLoading } from '$lib/stores/auth.svelte';
   import Login from './components/Login.svelte';
   import Panel from './components/Panel.svelte';
+  import appIcon from './assets/app-icon.png';
   import { onMount } from 'svelte';
 
   onMount(() => {
@@ -11,7 +12,7 @@
 
 {#if getAuthLoading()}
   <div class="splash">
-    <div class="splash-logo">JT</div>
+    <img class="splash-logo" src={appIcon} alt="Catet Task" />
   </div>
 {:else if isLoggedIn()}
   <Panel />
@@ -30,14 +31,7 @@
     width: 48px;
     height: 48px;
     border-radius: 14px;
-    background: linear-gradient(135deg, var(--accent-blue), #6366f1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-    font-weight: 700;
-    color: white;
-    font-family: var(--font-mono);
+    object-fit: contain;
     animation: pulse 2s ease-in-out infinite;
   }
 </style>

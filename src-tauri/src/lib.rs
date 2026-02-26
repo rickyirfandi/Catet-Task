@@ -160,6 +160,9 @@ pub fn run() {
             // Get the tray icon created from tauri.conf.json and attach the menu
             if let Some(tray) = app.tray_by_id("main-tray") {
                 tray.set_menu(Some(menu)).expect("Failed to set tray menu");
+                // Only show the menu on right-click, not left-click
+                #[cfg(any(target_os = "macos", windows))]
+                let _ = tray.set_show_menu_on_left_click(false);
                 eprintln!("[CT] setup: tray menu attached");
 
                 // Handle left-click: toggle panel below tray icon
