@@ -3,11 +3,7 @@ mod db;
 mod jira;
 mod timer;
 
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc, Mutex,
-};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::{Arc, Mutex};
 use sqlx::SqlitePool;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
@@ -15,14 +11,6 @@ use tauri::{
     Manager, RunEvent, WindowEvent,
 };
 use tauri_plugin_autostart::ManagerExt;
-use tauri_plugin_positioner::{Position, WindowExt};
-
-fn now_millis() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
-}
 
 pub fn run() {
     let jira_client: Arc<Mutex<Option<jira::client::JiraClient>>> =
@@ -30,16 +18,7 @@ pub fn run() {
     let timer_engine: Arc<Mutex<timer::engine::TimerEngine>> =
         Arc::new(Mutex::new(timer::engine::TimerEngine::new()));
 
-    // Shared timestamp to detect blur-hide → tray-click race condition.
-    // When clicking the tray icon while the panel is open, the blur event
-    // fires first (hiding the panel), then the tray click fires. Without
-    // this guard the tray click would immediately re-show the panel.
-    let last_blur_hide = Arc::new(AtomicU64::new(0));
-    let blur_ts_for_window = last_blur_hide.clone();
-    let blur_ts_for_tray = last_blur_hide;
-
     tauri::Builder::default()
-        .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -75,23 +54,12 @@ pub fn run() {
             commands::settings::set_launch_at_login,
             commands::settings::reset_timer_data,
         ])
-        // Window event handling for the tray-only panel:
-        // 1. CloseRequested → hide instead of destroy (keeps the app alive)
-        // 2. Focused(false) → auto-dismiss like CleanMyMac's tray popover
-        .on_window_event(move |window, event| {
+        // CloseRequested → hide instead of destroy so the app stays alive in the tray.
+        .on_window_event(|window, event| {
             if window.label() == "main" {
-                match event {
-                    WindowEvent::CloseRequested { api, .. } => {
-                        // Never destroy the window — just hide it.
-                        // Without this, macOS closes the window and the app exits.
-                        api.prevent_close();
-                        let _ = window.hide();
-                    }
-                    WindowEvent::Focused(false) => {
-                        let _ = window.hide();
-                        blur_ts_for_window.store(now_millis(), Ordering::SeqCst);
-                    }
-                    _ => {}
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
                 }
             }
         })
@@ -147,16 +115,21 @@ pub fn run() {
             }
             eprintln!("[CT] setup: autostart synced");
 
-            // Build tray right-click menu with disabled app label + separator + Quit
+            // Build tray right-click menu
             let app_label = MenuItemBuilder::with_id("app-label", "Catet Task")
                 .enabled(false)
                 .build(app)
                 .expect("Failed to build app label");
+            let show_window_item = MenuItemBuilder::with_id("show-window", "Open Catet Task")
+                .build(app)
+                .expect("Failed to build show window item");
             let quit_item = MenuItemBuilder::with_id("quit", "Quit Catet Task")
                 .build(app)
                 .expect("Failed to build quit menu item");
             let menu = MenuBuilder::new(app)
                 .item(&app_label)
+                .separator()
+                .item(&show_window_item)
                 .separator()
                 .item(&quit_item)
                 .build()
@@ -171,8 +144,7 @@ pub fn run() {
                 let _ = tray.set_show_menu_on_left_click(false);
                 eprintln!("[CT] setup: tray menu attached");
 
-                // Handle left-click: toggle panel below tray icon
-                let blur_ts = blur_ts_for_tray.clone();
+                // Handle left-click: show/focus the window
                 tray.on_tray_icon_event(move |tray, event| {
                     let is_left_click = matches!(
                         event,
@@ -182,30 +154,20 @@ pub fn run() {
                     if is_left_click {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
-                            // Position directly below the tray icon (like CleanMyMac)
-                            let _ = window.as_ref().window().move_window(Position::TrayBottomCenter);
-
-                            if window.is_visible().unwrap_or(false) {
-                                let _ = window.hide();
-                            } else {
-                                // Skip re-show if the panel was just hidden by a blur event
-                                // (the blur fires before the tray click when clicking the
-                                // tray icon to dismiss).
-                                let since_blur = now_millis().saturating_sub(
-                                    blur_ts.load(Ordering::SeqCst),
-                                );
-                                if since_blur > 300 {
-                                    let _ = window.show();
-                                    let _ = window.set_focus();
-                                }
-                            }
+                            let _ = window.show();
+                            let _ = window.set_focus();
                         }
                     }
                 });
 
                 // Handle menu events (right-click menu)
                 tray.on_menu_event(move |app, event| {
-                    if event.id().as_ref() == "quit" {
+                    if event.id().as_ref() == "show-window" {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    } else if event.id().as_ref() == "quit" {
                         // Gracefully stop the timer before exiting
                         let engine = app.state::<Arc<Mutex<timer::engine::TimerEngine>>>();
                         let pool = app.state::<SqlitePool>();
@@ -233,17 +195,12 @@ pub fn run() {
                 eprintln!("[CT] setup: WARNING - tray icon 'main-tray' not found!");
             }
 
-            // Show the panel on startup, positioned top-right
-            // (avoid TrayBottomCenter here — tray icon may not be fully registered yet)
-            eprintln!("[CT] setup: about to show window");
+            // Show the window centered on startup
             if let Some(window) = app.get_webview_window("main") {
-                eprintln!("[CT] setup: got window, positioning top-right...");
-                let pos_result = window.as_ref().window().move_window(Position::TopRight);
-                eprintln!("[CT] setup: move_window result: {:?}", pos_result);
-                let show_result = window.show();
-                eprintln!("[CT] setup: show result: {:?}", show_result);
-                let focus_result = window.set_focus();
-                eprintln!("[CT] setup: set_focus result: {:?}", focus_result);
+                let _ = window.center();
+                let _ = window.show();
+                let _ = window.set_focus();
+                eprintln!("[CT] setup: window shown");
             } else {
                 eprintln!("[CT] setup: WARNING - window 'main' not found!");
             }
