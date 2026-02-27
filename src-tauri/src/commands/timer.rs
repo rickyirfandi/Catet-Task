@@ -1,6 +1,6 @@
 use crate::db::queries;
 use crate::jira::models::{AppTimeEntry, AppTimerState};
-use crate::timer::engine::TimerEngine;
+use crate::timer::engine::{self, TimerEngine};
 use sqlx::SqlitePool;
 use std::sync::{Arc, Mutex};
 use tauri::State;
@@ -24,10 +24,13 @@ pub async fn start_timer(
     task_id: String,
     engine_state: State<'_, Arc<Mutex<TimerEngine>>>,
     pool: State<'_, SqlitePool>,
+    app: tauri::AppHandle,
 ) -> Result<(), String> {
     let stopped = {
-        let mut engine = engine_state.lock().unwrap();
-        engine.start(&task_id)
+        let mut eng = engine_state.lock().unwrap();
+        let stopped = eng.start(&task_id);
+        engine::update_tray_now(&app, &eng);
+        stopped
     };
 
     // Finalize the previously running entry if any
@@ -49,10 +52,13 @@ pub async fn start_timer(
 pub async fn stop_timer(
     engine_state: State<'_, Arc<Mutex<TimerEngine>>>,
     pool: State<'_, SqlitePool>,
+    app: tauri::AppHandle,
 ) -> Result<(), String> {
     let stopped = {
-        let mut engine = engine_state.lock().unwrap();
-        engine.stop()
+        let mut eng = engine_state.lock().unwrap();
+        let stopped = eng.stop();
+        engine::update_tray_now(&app, &eng);
+        stopped
     };
 
     if let Some(stopped_entry) = stopped {
@@ -67,17 +73,27 @@ pub async fn stop_timer(
 #[tauri::command]
 pub async fn pause_timer(
     engine_state: State<'_, Arc<Mutex<TimerEngine>>>,
+    app: tauri::AppHandle,
 ) -> Result<(), String> {
-    let mut engine = engine_state.lock().unwrap();
-    engine.pause()
+    let mut eng = engine_state.lock().unwrap();
+    let result = eng.pause();
+    if result.is_ok() {
+        engine::update_tray_now(&app, &eng);
+    }
+    result
 }
 
 #[tauri::command]
 pub async fn resume_timer(
     engine_state: State<'_, Arc<Mutex<TimerEngine>>>,
+    app: tauri::AppHandle,
 ) -> Result<(), String> {
-    let mut engine = engine_state.lock().unwrap();
-    engine.resume()
+    let mut eng = engine_state.lock().unwrap();
+    let result = eng.resume();
+    if result.is_ok() {
+        engine::update_tray_now(&app, &eng);
+    }
+    result
 }
 
 #[tauri::command]

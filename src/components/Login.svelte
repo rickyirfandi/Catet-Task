@@ -27,12 +27,6 @@
     <div class="login-desc">Track time, log work, stay in flow.</div>
   </div>
 
-  <div class="auth-methods">
-    <div class="auth-chip active">API Token</div>
-    <div class="auth-chip disabled">OAuth 2.0</div>
-    <div class="auth-chip disabled">Server PAT</div>
-  </div>
-
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <form class="login-form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} onkeydown={handleKeydown}>
     <div class="input-group">
@@ -102,34 +96,6 @@
   .login-desc {
     font-size: 12px;
     color: var(--text-secondary);
-  }
-
-  .auth-methods {
-    padding: 0 24px 16px;
-    display: flex;
-    gap: 6px;
-  }
-
-  .auth-chip {
-    font-size: 10px;
-    font-weight: 500;
-    color: var(--text-muted);
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    padding: 5px 12px;
-    border-radius: 20px;
-    font-family: var(--font-mono);
-  }
-
-  .auth-chip.active {
-    color: var(--accent-blue);
-    border-color: var(--accent-blue);
-    background: rgba(61, 122, 237, 0.08);
-  }
-
-  .auth-chip.disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
   }
 
   .login-form {

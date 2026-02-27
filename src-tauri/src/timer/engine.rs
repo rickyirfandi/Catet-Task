@@ -158,6 +158,31 @@ impl TimerEngine {
     }
 }
 
+/// Immediately updates the tray title based on the current engine state.
+/// Call this after state changes so the tray reflects the new state without waiting for the next tick.
+pub fn update_tray_now(app: &AppHandle, engine: &TimerEngine) {
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        let title = match &engine.state {
+            TimerState::Running {
+                task_id,
+                start_instant,
+                accumulated_secs,
+            } => {
+                let elapsed = accumulated_secs + start_instant.elapsed().as_secs();
+                format!("\u{25CF} {} \u{00B7} {}", task_id, format_elapsed(elapsed))
+            }
+            TimerState::Paused {
+                task_id,
+                elapsed_secs,
+            } => {
+                format!("{} \u{00B7} {} \u{23F8}", task_id, format_elapsed(*elapsed_secs))
+            }
+            TimerState::Idle => "CT".to_string(),
+        };
+        let _ = tray.set_title(Some(&title));
+    }
+}
+
 /// Spawns an async task that ticks every second, updating the tray title and emitting events.
 pub fn start_tick_loop(app: AppHandle, engine: Arc<Mutex<TimerEngine>>) {
     tauri::async_runtime::spawn(async move {
@@ -187,8 +212,8 @@ pub fn start_tick_loop(app: AppHandle, engine: Arc<Mutex<TimerEngine>>) {
                         let elapsed = format_elapsed(payload.elapsed_secs);
                         format!("{} \u{00B7} {} \u{23F8}", task_id, elapsed)
                     }
-                    // Idle: no text, just the tray icon
-                    _ => String::new(),
+                    // Idle: always show "CT" so the status item stays visible
+                    _ => "CT".to_string(),
                 };
                 let _ = tray.set_title(Some(&title));
             }
