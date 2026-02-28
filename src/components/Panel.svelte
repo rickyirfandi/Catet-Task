@@ -7,12 +7,16 @@
   import Settings from './Settings.svelte';
   import type { TabId } from '$lib/types';
   import { onMount } from 'svelte';
+  import { listen } from '@tauri-apps/api/event';
 
   let activeTab = $state<TabId>('timer');
 
-  onMount(() => {
+  onMount(async () => {
     initTimer();
     refreshTasks();
+    await listen('open-today-tab', () => {
+      activeTab = 'today';
+    });
   });
 </script>
 

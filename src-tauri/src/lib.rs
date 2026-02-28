@@ -1,14 +1,17 @@
 mod commands;
 mod db;
 mod jira;
+mod reminder;
 mod timer;
+
+use reminder::PendingOpenLog;
 
 use std::sync::{Arc, Mutex};
 use sqlx::SqlitePool;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::TrayIconEvent,
-    Manager, RunEvent, WindowEvent,
+    Emitter, Manager, RunEvent, WindowEvent,
 };
 use tauri_plugin_autostart::ManagerExt;
 
@@ -23,6 +26,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_notification::init())
         .manage(jira_client)
         .manage(timer_engine)
         .invoke_handler(tauri::generate_handler![
@@ -98,6 +102,7 @@ pub fn run() {
             });
 
             app.manage(pool.clone());
+            app.manage(PendingOpenLog(std::sync::Mutex::new(false)));
             eprintln!("[CT] setup: pool managed");
 
             // Sync autostart state with saved preference
@@ -208,8 +213,29 @@ pub fn run() {
             // Start the timer tick loop
             let app_handle = app.handle().clone();
             let engine = app.state::<Arc<Mutex<timer::engine::TimerEngine>>>().inner().clone();
-            timer::engine::start_tick_loop(app_handle, engine);
-            eprintln!("[CT] setup: tick loop started, setup complete");
+            timer::engine::start_tick_loop(app_handle.clone(), engine);
+            eprintln!("[CT] setup: tick loop started");
+
+            // Start the daily reminder loop
+            reminder::start_reminder_loop(app_handle.clone(), pool.clone());
+            eprintln!("[CT] setup: reminder loop started");
+
+            // Wire up window focus handler to open Today tab when reminder is clicked
+            if let Some(window) = app.get_webview_window("main") {
+                let app_for_focus = app_handle.clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::Focused(true) = event {
+                        let pending = app_for_focus.state::<PendingOpenLog>();
+                        let mut flag = pending.0.lock().unwrap();
+                        if *flag {
+                            *flag = false;
+                            let _ = app_for_focus.emit("open-today-tab", ());
+                        }
+                    }
+                });
+            }
+
+            eprintln!("[CT] setup: setup complete");
 
             Ok(())
         })

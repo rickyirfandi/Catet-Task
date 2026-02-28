@@ -164,22 +164,23 @@ pub fn update_tray_now(app: &AppHandle, engine: &TimerEngine) {
     if let Some(tray) = app.tray_by_id("main-tray") {
         let title = match &engine.state {
             TimerState::Running {
-                task_id,
                 start_instant,
                 accumulated_secs,
+                ..
             } => {
                 let elapsed = accumulated_secs + start_instant.elapsed().as_secs();
-                format!("\u{25CF} {} \u{00B7} {}", task_id, format_elapsed(elapsed))
+                format!("\u{25CF} {}", format_elapsed(elapsed))
             }
-            TimerState::Paused {
-                task_id,
-                elapsed_secs,
-            } => {
-                format!("{} \u{00B7} {} \u{23F8}", task_id, format_elapsed(*elapsed_secs))
+            TimerState::Paused { elapsed_secs, .. } => {
+                format!("{} \u{23F8}", format_elapsed(*elapsed_secs))
             }
             TimerState::Idle => "CT".to_string(),
         };
-        let _ = tray.set_title(Some(&title));
+        if let Err(e) = tray.set_title(Some(&title)) {
+            eprintln!("[CT] update_tray_now set_title error: {e}");
+        }
+    } else {
+        eprintln!("[CT] update_tray_now: tray_by_id returned None");
     }
 }
 
@@ -187,38 +188,31 @@ pub fn update_tray_now(app: &AppHandle, engine: &TimerEngine) {
 pub fn start_tick_loop(app: AppHandle, engine: Arc<Mutex<TimerEngine>>) {
     tauri::async_runtime::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
-        let mut tick_count: u64 = 0;
         loop {
             interval.tick().await;
-            tick_count += 1;
 
             let payload = {
                 let engine = engine.lock().unwrap();
                 engine.get_tick_payload()
             };
 
-            // Update tray title
             if let Some(tray) = app.tray_by_id("main-tray") {
                 let title = match payload.status.as_str() {
                     "running" => {
-                        let task_id = payload.task_id.as_deref().unwrap_or("?");
-                        let elapsed = format_elapsed(payload.elapsed_secs);
-                        // Alternate ● and ○ every second for a pulse effect
-                        let dot = if tick_count % 2 == 0 { "\u{25CF}" } else { "\u{25CB}" };
-                        format!("{} {} \u{00B7} {}", dot, task_id, elapsed)
+                        format!("\u{25CF} {}", format_elapsed(payload.elapsed_secs))
                     }
                     "paused" => {
-                        let task_id = payload.task_id.as_deref().unwrap_or("?");
-                        let elapsed = format_elapsed(payload.elapsed_secs);
-                        format!("{} \u{00B7} {} \u{23F8}", task_id, elapsed)
+                        format!("{} \u{23F8}", format_elapsed(payload.elapsed_secs))
                     }
-                    // Idle: always show "CT" so the status item stays visible
                     _ => "CT".to_string(),
                 };
-                let _ = tray.set_title(Some(&title));
+                if let Err(e) = tray.set_title(Some(&title)) {
+                    eprintln!("[CT] tick set_title error: {e}");
+                }
+            } else {
+                eprintln!("[CT] tick: tray_by_id returned None");
             }
 
-            // Emit tick event to frontend
             let _ = app.emit("timer-tick", &payload);
         }
     });

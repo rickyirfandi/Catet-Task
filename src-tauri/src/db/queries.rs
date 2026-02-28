@@ -207,6 +207,16 @@ pub async fn finalize_orphaned_entries(pool: &SqlitePool) -> Result<u64, sqlx::E
     Ok(result.rows_affected())
 }
 
+pub async fn count_unlogged_today(pool: &SqlitePool) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar(
+        "SELECT COUNT(*) FROM time_entries
+         WHERE date(start_time, 'localtime') = date('now', 'localtime')
+         AND synced_to_jira = 0",
+    )
+    .fetch_one(pool)
+    .await
+}
+
 pub async fn delete_all_entries(pool: &SqlitePool) -> Result<u64, sqlx::Error> {
     let result = sqlx::query("DELETE FROM time_entries")
         .execute(pool)

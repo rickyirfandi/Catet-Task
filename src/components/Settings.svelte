@@ -5,6 +5,9 @@
 
   let roundDuration = $state(15);
   let launchAtLogin = $state(false);
+  let dailyReminder = $state(false);
+  let reminderTime = $state('17:00');
+  const reminderTimes = ['16:00', '17:00', '18:00', '19:00', '20:00'];
 
   onMount(async () => {
     try {
@@ -12,6 +15,10 @@
       if (rd) roundDuration = parseInt(rd);
       const lal = await getSetting('launch_at_login');
       if (lal) launchAtLogin = lal === 'true';
+      const dr = await getSetting('daily_reminder');
+      if (dr) dailyReminder = dr === 'true';
+      const rt = await getSetting('reminder_time');
+      if (rt) reminderTime = rt;
     } catch {
       // Settings not yet set
     }
@@ -20,6 +27,17 @@
   async function setRoundDuration(val: number) {
     roundDuration = val;
     await setSetting('round_duration', String(val));
+  }
+
+  async function toggleDailyReminder() {
+    dailyReminder = !dailyReminder;
+    await setSetting('daily_reminder', String(dailyReminder));
+  }
+
+  async function cycleReminderTime() {
+    const idx = reminderTimes.indexOf(reminderTime);
+    reminderTime = reminderTimes[(idx + 1) % reminderTimes.length];
+    await setSetting('reminder_time', reminderTime);
   }
 
   async function toggleLaunchAtLogin() {
@@ -96,20 +114,22 @@
       <span class="setting-val-static">5 min</span>
     </div>
 
-    <div class="setting-item disabled">
+    <div class="setting-item">
       <div class="setting-info">
         <div class="setting-name">Daily Reminder</div>
         <div class="setting-desc">Notify if unlogged entries at end of day</div>
       </div>
-      <div class="toggle"></div>
+      <button class="toggle" class:on={dailyReminder} onclick={toggleDailyReminder}></button>
     </div>
 
-    <div class="setting-item disabled">
+    <div class="setting-item" class:disabled={!dailyReminder}>
       <div class="setting-info">
         <div class="setting-name">Reminder Time</div>
         <div class="setting-desc">When to send the reminder notification</div>
       </div>
-      <span class="setting-val-static">17:00</span>
+      <button class="setting-val" onclick={cycleReminderTime} disabled={!dailyReminder}>
+        {reminderTime}
+      </button>
     </div>
 
     <div class="setting-item">
