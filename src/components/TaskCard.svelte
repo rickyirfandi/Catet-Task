@@ -10,9 +10,10 @@
     task: Task;
     entry?: TimeEntry | null;
     logged?: boolean;
+    onSelect?: ((task: Task) => void) | null;
   }
 
-  let { task, entry = null, logged = false }: Props = $props();
+  let { task, entry = null, logged = false, onSelect = null }: Props = $props();
 
   let isActive = $derived(getTaskId() === task.id && getStatus() !== 'idle');
   let isTimerRunning = $derived(getTaskId() === task.id && getStatus() === 'running');
@@ -45,7 +46,10 @@
   }
 
   function handleCardClick() {
-    if (!logged) {
+    if (logged) return;
+    if (onSelect) {
+      onSelect(task);
+    } else {
       toggle(task.id);
     }
   }

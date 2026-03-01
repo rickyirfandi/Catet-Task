@@ -1,11 +1,13 @@
 <script lang="ts">
   import SearchBar from './SearchBar.svelte';
   import TaskCard from './TaskCard.svelte';
+  import TaskDetail from './TaskDetail.svelte';
   import { getFilteredTasks, getLoading, getError, refresh as refreshTasks } from '$lib/stores/tasks.svelte';
   import { getTaskId, getStatus } from '$lib/stores/timer.svelte';
   import { getEntries, getLoggedEntries, getUnloggedEntries, getTaskTotalSecs } from '$lib/stores/entries.svelte';
   import { refresh as refreshEntries } from '$lib/stores/entries.svelte';
   import { onMount } from 'svelte';
+  import type { Task } from '$lib/types';
 
   onMount(() => {
     refreshEntries();
@@ -45,8 +47,15 @@
   function entryForTask(taskId: string) {
     return entries.find(e => e.taskId === taskId);
   }
+
+  let selectedTaskId = $state<string | null>(null);
+  // Always derived from the live tasks store — reflects pin changes, status updates, etc.
+  let selectedTask = $derived(selectedTaskId ? (tasks.find(t => t.id === selectedTaskId) ?? null) : null);
 </script>
 
+{#if selectedTask}
+  <TaskDetail task={selectedTask} onBack={() => selectedTaskId = null} />
+{:else}
 <SearchBar />
 
 <div class="task-list">
@@ -63,20 +72,20 @@
 
   {#if activeTask && timerStatus !== 'idle'}
     <div class="group-label">&#9654; Currently Tracking</div>
-    <TaskCard task={activeTask} entry={entryForTask(activeTask.id)} />
+    <TaskCard task={activeTask} entry={entryForTask(activeTask.id)} onSelect={(t) => selectedTaskId = t.id} />
   {/if}
 
   {#if unloggedTasks.length > 0}
     <div class="group-label">Unlogged</div>
     {#each unloggedTasks as task (task.id)}
-      <TaskCard {task} entry={entryForTask(task.id)} />
+      <TaskCard {task} entry={entryForTask(task.id)} onSelect={(t) => selectedTaskId = t.id} />
     {/each}
   {/if}
 
   {#if freshTasks.length > 0}
     <div class="group-label">My Tasks</div>
     {#each freshTasks as task (task.id)}
-      <TaskCard {task} entry={entryForTask(task.id)} />
+      <TaskCard {task} entry={entryForTask(task.id)} onSelect={(t) => selectedTaskId = t.id} />
     {/each}
   {/if}
 
@@ -90,6 +99,7 @@
     {/each}
   {/if}
 </div>
+{/if}
 
 <style>
   .task-list {

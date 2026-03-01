@@ -145,6 +145,8 @@
   <button class="btn-danger" onclick={handleLogout}>Disconnect &amp; Logout</button>
   <button class="btn-quit" onclick={handleQuit}>Quit Catet Task</button>
 
+  <p class="byline">made with ❤️ by Ricky Irfandi</p>
+
   {#if showResetConfirm}
     <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
     <div class="overlay" onclick={() => showResetConfirm = false}>
@@ -369,6 +371,16 @@
   .btn-quit:hover {
     color: var(--text-secondary);
     border-color: var(--text-muted);
+  }
+
+  .byline {
+    text-align: center;
+    font-size: 10px;
+    color: var(--text-muted);
+    opacity: 0.45;
+    margin: 4px 0 16px;
+    font-family: var(--font-body);
+    letter-spacing: 0.02em;
   }
 
   .overlay {

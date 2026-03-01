@@ -25,7 +25,7 @@
     <div class="tabs">
       <button class="tab" class:active={activeTab === 'timer'} onclick={() => activeTab = 'timer'}>Timer</button>
       <button class="tab" class:active={activeTab === 'today'} onclick={() => activeTab = 'today'}>Today</button>
-      <button class="tab" class:active={activeTab === 'settings'} onclick={() => activeTab = 'settings'}>&#9881;</button>
+      <button class="tab tab-gear" class:active={activeTab === 'settings'} onclick={() => activeTab = 'settings'}>&#9881;</button>
     </div>
     <div class="avatar">{getInitials()}</div>
   </header>
@@ -63,6 +63,11 @@
     background: var(--bg-card);
     border-radius: var(--radius-sm);
     padding: 2px;
+  }
+
+  .tab-gear {
+    font-size: 16px;
+    padding: 3px 10px;
   }
 
   .tab {
