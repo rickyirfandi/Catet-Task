@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { JiraUser, Task, TimeEntry, TimerState, WorklogProgress } from '$lib/types';
+import type { JiraUser, Task, TaskDetailData, TimeEntry, TimerState, WorklogProgress } from '$lib/types';
 
 // NOTE: Tauri v2 auto-converts camelCase (JS) → snake_case (Rust) for top-level command args.
 // So JS { taskId } maps to Rust task_id. Always use camelCase here.
@@ -30,6 +30,9 @@ export const pinTask = (taskId: string) =>
 export const unpinTask = (taskId: string) =>
   invoke<void>('unpin_task', { taskId });
 
+export const getTaskDetail = (taskId: string) =>
+  invoke<TaskDetailData>('get_task_detail', { taskId });
+
 // ── Timer ──
 export const startTimer = (taskId: string) =>
   invoke<void>('start_timer', { taskId });
@@ -49,6 +52,9 @@ export const getActiveTimer = () =>
 // ── Entries ──
 export const getEntriesToday = () =>
   invoke<TimeEntry[]>('get_entries_today');
+
+export const getEntriesRange = (startDate: string, endDate: string) =>
+  invoke<TimeEntry[]>('get_entries_range', { startDate, endDate });
 
 export const updateEntry = (entryId: number, adjustedSecs: number | null, description: string | null, date: string | null) =>
   invoke<void>('update_entry', { entryId, adjustedSecs, description, date });

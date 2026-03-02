@@ -1,3 +1,33 @@
+const SQLITE_UTC_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
+
+export function parseAppDate(value: string): Date | null {
+  const raw = value?.trim();
+  if (!raw) return null;
+
+  if (SQLITE_UTC_RE.test(raw)) {
+    const sqliteAsUtc = `${raw.replace(' ', 'T')}Z`;
+    const parsedSqlite = new Date(sqliteAsUtc);
+    if (!Number.isNaN(parsedSqlite.getTime())) {
+      return parsedSqlite;
+    }
+  }
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed;
+  }
+
+  const normalizedOffset = raw.replace(/([+-]\d{2})(\d{2})$/, '$1:$2');
+  if (normalizedOffset !== raw) {
+    const parsedNormalized = new Date(normalizedOffset);
+    if (!Number.isNaN(parsedNormalized.getTime())) {
+      return parsedNormalized;
+    }
+  }
+
+  return null;
+}
+
 /** Format seconds as HH:MM:SS */
 export function formatDuration(totalSecs: number): string {
   const h = Math.floor(totalSecs / 3600);
@@ -18,13 +48,38 @@ export function formatDurationShort(totalSecs: number): string {
 
 /** Format a date string as "HH:MM" */
 export function formatTime(isoString: string): string {
-  const d = new Date(isoString);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const d = parseAppDate(isoString);
+  if (!d) return '--:--';
+  return new Intl.DateTimeFormat([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(d);
+}
+
+/** Format a date string as "DD Mon YYYY, HH:MM" in local timezone */
+export function formatDateTime(isoString: string): string {
+  const d = parseAppDate(isoString);
+  if (!d) return '--';
+  return new Intl.DateTimeFormat([], {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(d);
+}
+
+/** Returns the current local timezone identifier */
+export function getLocalTimezoneLabel(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
 }
 
 /** Format a date string as "DDD, DD MMM YYYY" */
 export function formatDateHeader(isoString: string): string {
-  const d = new Date(isoString);
+  const d = parseAppDate(isoString);
+  if (!d) return 'INVALID DATE';
   const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
   const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
   return `${days[d.getDay()]}, ${String(d.getDate()).padStart(2, '0')} ${months[d.getMonth()]} ${d.getFullYear()}`;

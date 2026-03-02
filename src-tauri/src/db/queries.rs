@@ -131,18 +131,21 @@ pub struct EntryRow {
 }
 
 pub async fn create_entry(pool: &SqlitePool, task_id: &str) -> Result<i64, sqlx::Error> {
-    let result = sqlx::query(
-        "INSERT INTO time_entries (task_id, start_time) VALUES (?1, datetime('now'))"
-    )
-    .bind(task_id)
-    .execute(pool)
-    .await?;
+    let result =
+        sqlx::query("INSERT INTO time_entries (task_id, start_time) VALUES (?1, datetime('now'))")
+            .bind(task_id)
+            .execute(pool)
+            .await?;
     Ok(result.last_insert_rowid())
 }
 
-pub async fn finalize_entry(pool: &SqlitePool, id: i64, duration_secs: i64) -> Result<(), sqlx::Error> {
+pub async fn finalize_entry(
+    pool: &SqlitePool,
+    id: i64,
+    duration_secs: i64,
+) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "UPDATE time_entries SET end_time = datetime('now'), duration_secs = ?2 WHERE id = ?1"
+        "UPDATE time_entries SET end_time = datetime('now'), duration_secs = ?2 WHERE id = ?1",
     )
     .bind(id)
     .bind(duration_secs)
@@ -151,7 +154,10 @@ pub async fn finalize_entry(pool: &SqlitePool, id: i64, duration_secs: i64) -> R
     Ok(())
 }
 
-pub async fn get_running_entry_for_task(pool: &SqlitePool, task_id: &str) -> Result<Option<EntryRow>, sqlx::Error> {
+pub async fn get_running_entry_for_task(
+    pool: &SqlitePool,
+    task_id: &str,
+) -> Result<Option<EntryRow>, sqlx::Error> {
     sqlx::query_as::<_, EntryRow>(
         "SELECT id, task_id, start_time, end_time, duration_secs, adjusted_secs, description, synced_to_jira, jira_worklog_id FROM time_entries WHERE task_id = ?1 AND end_time IS NULL ORDER BY start_time DESC LIMIT 1"
     )
@@ -160,10 +166,38 @@ pub async fn get_running_entry_for_task(pool: &SqlitePool, task_id: &str) -> Res
     .await
 }
 
+pub async fn get_open_entries(pool: &SqlitePool) -> Result<Vec<EntryRow>, sqlx::Error> {
+    sqlx::query_as::<_, EntryRow>(
+        "SELECT id, task_id, start_time, end_time, duration_secs, adjusted_secs, description, synced_to_jira, jira_worklog_id
+         FROM time_entries
+         WHERE end_time IS NULL
+         ORDER BY start_time DESC"
+    )
+    .fetch_all(pool)
+    .await
+}
+
 pub async fn get_entries_today(pool: &SqlitePool) -> Result<Vec<EntryRow>, sqlx::Error> {
     sqlx::query_as::<_, EntryRow>(
         "SELECT id, task_id, start_time, end_time, duration_secs, adjusted_secs, description, synced_to_jira, jira_worklog_id FROM time_entries WHERE date(start_time) = date('now') ORDER BY start_time DESC"
     )
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn get_entries_range(
+    pool: &SqlitePool,
+    start_date: &str,
+    end_date: &str,
+) -> Result<Vec<EntryRow>, sqlx::Error> {
+    sqlx::query_as::<_, EntryRow>(
+        "SELECT id, task_id, start_time, end_time, duration_secs, adjusted_secs, description, synced_to_jira, jira_worklog_id
+         FROM time_entries
+         WHERE date(start_time, 'localtime') BETWEEN date(?1) AND date(?2)
+         ORDER BY start_time DESC",
+    )
+    .bind(start_date)
+    .bind(end_date)
     .fetch_all(pool)
     .await
 }
@@ -183,7 +217,11 @@ pub async fn update_entry(
     Ok(())
 }
 
-pub async fn mark_entry_synced(pool: &SqlitePool, id: i64, worklog_id: &str) -> Result<(), sqlx::Error> {
+pub async fn mark_entry_synced(
+    pool: &SqlitePool,
+    id: i64,
+    worklog_id: &str,
+) -> Result<(), sqlx::Error> {
     sqlx::query("UPDATE time_entries SET synced_to_jira = 1, jira_worklog_id = ?2 WHERE id = ?1")
         .bind(id)
         .bind(worklog_id)
@@ -200,10 +238,38 @@ pub async fn finalize_orphaned_entries(pool: &SqlitePool) -> Result<u64, sqlx::E
     let result = sqlx::query(
         "UPDATE time_entries SET end_time = datetime('now'), \
          duration_secs = CAST((julianday('now') - julianday(start_time)) * 86400 AS INTEGER) \
-         WHERE end_time IS NULL"
+         WHERE end_time IS NULL",
     )
     .execute(pool)
     .await?;
+    Ok(result.rows_affected())
+}
+
+pub async fn finalize_open_entries_except(
+    pool: &SqlitePool,
+    keep_id: Option<i64>,
+) -> Result<u64, sqlx::Error> {
+    let result = if let Some(id) = keep_id {
+        sqlx::query(
+            "UPDATE time_entries
+             SET end_time = datetime('now'),
+                 duration_secs = CAST((julianday('now') - julianday(start_time)) * 86400 AS INTEGER)
+             WHERE end_time IS NULL AND id != ?1",
+        )
+        .bind(id)
+        .execute(pool)
+        .await?
+    } else {
+        sqlx::query(
+            "UPDATE time_entries
+             SET end_time = datetime('now'),
+                 duration_secs = CAST((julianday('now') - julianday(start_time)) * 86400 AS INTEGER)
+             WHERE end_time IS NULL",
+        )
+        .execute(pool)
+        .await?
+    };
+
     Ok(result.rows_affected())
 }
 
@@ -238,6 +304,14 @@ pub async fn set_setting(pool: &SqlitePool, key: &str, value: &str) -> Result<()
     sqlx::query("INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)")
         .bind(key)
         .bind(value)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn delete_setting(pool: &SqlitePool, key: &str) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM settings WHERE key = ?1")
+        .bind(key)
         .execute(pool)
         .await?;
     Ok(())

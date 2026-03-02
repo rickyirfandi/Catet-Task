@@ -18,6 +18,20 @@ export interface Task {
   lastFetched: string | null;
 }
 
+export interface TaskDetailData {
+  taskId: string;
+  summary: string;
+  description: string | null;
+  status: string;
+  projectKey: string;
+  projectName: string;
+  issueType: string | null;
+  priority: string | null;
+  assignee: string | null;
+  updatedAt: string | null;
+  createdAt: string | null;
+}
+
 export interface TimeEntry {
   id: number;
   taskId: string;
@@ -60,5 +74,5 @@ export interface WorklogProgress {
 }
 
 export type AppView = 'login' | 'main';
-export type TabId = 'timer' | 'today' | 'settings';
+export type TabId = 'timer' | 'today' | 'weekly' | 'settings';
 export type LogFlowStep = 'select' | 'edit' | 'submitting' | 'result';

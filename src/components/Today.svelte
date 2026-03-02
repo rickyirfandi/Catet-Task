@@ -69,12 +69,6 @@
     return value;
   }
 
-  function formatDateTime(iso: string): string {
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-  }
-
   function buildExportRows(): { headers: string[]; rows: string[][] } {
     const headers = ['Task ID', 'Summary', 'Duration'];
     const agg = getAggregatedEntries();
@@ -87,6 +81,41 @@
     return { headers, rows };
   }
 
+  function buildReportText(): string {
+    const generatedAt = new Intl.DateTimeFormat([], {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(new Date());
+
+    const lines = [
+      'Catet Task Report',
+      `Period: ${dateHeader}`,
+      `Generated: ${generatedAt}`,
+      `Total tracked: ${formatDurationShort(totalSecs)}`,
+      '',
+      'Task breakdown:',
+    ];
+
+    if (aggEntries.length === 0) {
+      lines.push('- No tracked entries today.');
+      return lines.join('\n');
+    }
+
+    aggEntries.forEach((entry, i) => {
+      const secs = entryDuration(entry);
+      const pct = totalSecs > 0 ? ` (${Math.round((secs / totalSecs) * 100)}%)` : '';
+      lines.push(
+        `${i + 1}. ${entry.taskId} - ${taskName(entry.taskId)} - ${formatDurationShort(secs)}${pct}`
+      );
+    });
+
+    return lines.join('\n');
+  }
+
   function flashExportDone(msg: string) {
     exportDone = msg;
     setTimeout(() => {
@@ -96,9 +125,7 @@
   }
 
   async function copyToClipboard() {
-    const { headers, rows } = buildExportRows();
-    const lines = [headers.join('\t'), ...rows.map(r => r.join('\t'))];
-    await navigator.clipboard.writeText(lines.join('\n'));
+    await navigator.clipboard.writeText(buildReportText());
     flashExportDone('Copied!');
   }
 

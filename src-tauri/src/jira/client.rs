@@ -7,6 +7,7 @@ use std::time::Duration;
 use super::models::*;
 
 const SEARCH_FIELDS: &str = "summary,status,project";
+const DETAIL_FIELDS: &str = "summary,status,project,description,issuetype,priority,assignee,updated,created";
 
 #[derive(Debug, Clone)]
 pub struct JiraClient {
@@ -105,7 +106,7 @@ impl JiraClient {
     }
 
     pub async fn get_issue(&self, key: &str) -> Result<JiraIssue, String> {
-        let path = format!("/rest/api/3/issue/{}?fields={}", key, SEARCH_FIELDS);
+        let path = format!("/rest/api/3/issue/{}?fields={}", key, DETAIL_FIELDS);
         let req = self.request(reqwest::Method::GET, &path).await?;
         let resp = req.send().await.map_err(|e| format!("Network error: {}", e))?;
 
@@ -191,4 +192,3 @@ impl JiraClient {
         }
     }
 }
-

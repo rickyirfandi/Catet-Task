@@ -4,6 +4,7 @@
   import { refresh as refreshTasks } from '$lib/stores/tasks.svelte';
   import Timer from './Timer.svelte';
   import Today from './Today.svelte';
+  import Weekly from './Weekly.svelte';
   import Settings from './Settings.svelte';
   import type { TabId } from '$lib/types';
   import { onMount } from 'svelte';
@@ -25,6 +26,7 @@
     <div class="tabs">
       <button class="tab" class:active={activeTab === 'timer'} onclick={() => activeTab = 'timer'}>Timer</button>
       <button class="tab" class:active={activeTab === 'today'} onclick={() => activeTab = 'today'}>Today</button>
+      <button class="tab" class:active={activeTab === 'weekly'} onclick={() => activeTab = 'weekly'}>Weekly</button>
       <button class="tab tab-gear" class:active={activeTab === 'settings'} onclick={() => activeTab = 'settings'}>&#9881;</button>
     </div>
     <div class="avatar">{getInitials()}</div>
@@ -35,6 +37,8 @@
       <Timer />
     {:else if activeTab === 'today'}
       <Today />
+    {:else if activeTab === 'weekly'}
+      <Weekly />
     {:else}
       <Settings />
     {/if}

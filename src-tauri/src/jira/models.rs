@@ -46,6 +46,18 @@ pub struct JiraIssueFields {
     pub status: Option<JiraStatus>,
     #[serde(default)]
     pub project: Option<JiraProject>,
+    #[serde(default)]
+    pub description: Option<serde_json::Value>,
+    #[serde(rename = "issuetype", default)]
+    pub issue_type: Option<JiraIssueType>,
+    #[serde(default)]
+    pub priority: Option<JiraPriority>,
+    #[serde(default)]
+    pub assignee: Option<JiraAssignee>,
+    #[serde(default)]
+    pub updated: Option<String>,
+    #[serde(default)]
+    pub created: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +69,22 @@ pub struct JiraStatus {
 pub struct JiraProject {
     pub key: String,
     pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JiraIssueType {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JiraPriority {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JiraAssignee {
+    #[serde(rename = "displayName")]
+    pub display_name: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,6 +125,23 @@ pub struct AppTask {
     pub sprint_name: Option<String>,
     pub pinned: bool,
     pub last_fetched: Option<String>,
+}
+
+/// Frontend-facing task detail struct
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppTaskDetail {
+    pub task_id: String,
+    pub summary: String,
+    pub description: Option<String>,
+    pub status: String,
+    pub project_key: String,
+    pub project_name: String,
+    pub issue_type: Option<String>,
+    pub priority: Option<String>,
+    pub assignee: Option<String>,
+    pub updated_at: Option<String>,
+    pub created_at: Option<String>,
 }
 
 /// Frontend-facing time entry struct

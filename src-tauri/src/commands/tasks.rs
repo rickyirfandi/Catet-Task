@@ -1,7 +1,8 @@
 use crate::db::queries;
 use crate::jira::client::JiraClient;
-use crate::jira::models::AppTask;
+use crate::jira::models::{AppTask, AppTaskDetail};
 use sqlx::SqlitePool;
+use serde_json::Value;
 use std::sync::{Arc, Mutex};
 use tauri::State;
 
@@ -132,4 +133,96 @@ pub async fn unpin_task(
     queries::unpin_task(&pool, &task_id)
         .await
         .map_err(|e| format!("Failed to unpin task: {}", e))
+}
+
+#[tauri::command]
+pub async fn get_task_detail(
+    task_id: String,
+    client_state: State<'_, Arc<Mutex<Option<JiraClient>>>>,
+) -> Result<AppTaskDetail, String> {
+    let client = {
+        let state = client_state.lock().unwrap();
+        state.clone().ok_or("Not logged in")?
+    };
+
+    let issue = client.get_issue(&task_id).await?;
+    let fields = issue.fields;
+
+    let project_key = fields
+        .project
+        .as_ref()
+        .map(|p| p.key.clone())
+        .unwrap_or_default();
+    let project_name = fields
+        .project
+        .as_ref()
+        .map(|p| p.name.clone())
+        .unwrap_or_default();
+    let status = fields
+        .status
+        .as_ref()
+        .map(|s| s.name.clone())
+        .unwrap_or_default();
+    let issue_type = fields.issue_type.as_ref().map(|v| v.name.clone());
+    let priority = fields.priority.as_ref().map(|v| v.name.clone());
+    let assignee = fields.assignee.as_ref().map(|v| v.display_name.clone());
+    let description = fields
+        .description
+        .as_ref()
+        .map(adf_to_plain_text)
+        .filter(|text| !text.is_empty());
+
+    Ok(AppTaskDetail {
+        task_id: issue.key,
+        summary: fields.summary,
+        description,
+        status,
+        project_key,
+        project_name,
+        issue_type,
+        priority,
+        assignee,
+        updated_at: fields.updated,
+        created_at: fields.created,
+    })
+}
+
+fn adf_to_plain_text(value: &Value) -> String {
+    fn walk(node: &Value, out: &mut String) {
+        if let Some(text) = node.as_str() {
+            out.push_str(text);
+            return;
+        }
+
+        if let Some(items) = node.as_array() {
+            for item in items {
+                walk(item, out);
+            }
+            return;
+        }
+
+        if let Some(node_type) = node.get("type").and_then(Value::as_str) {
+            if node_type == "hardBreak" {
+                out.push('\n');
+            }
+        }
+
+        if let Some(text) = node.get("text").and_then(Value::as_str) {
+            out.push_str(text);
+        }
+
+        if let Some(children) = node.get("content").and_then(Value::as_array) {
+            let is_paragraph = node.get("type").and_then(Value::as_str) == Some("paragraph");
+            for child in children {
+                walk(child, out);
+            }
+            if is_paragraph && !out.ends_with('\n') {
+                out.push('\n');
+            }
+        }
+    }
+
+    let mut output = String::new();
+    walk(value, &mut output);
+    output.trim().to_string()
 }

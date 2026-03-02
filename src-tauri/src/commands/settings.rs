@@ -1,3 +1,4 @@
+use crate::commands::timer::TIMER_SESSION_KEY;
 use crate::db::queries;
 use crate::timer;
 use sqlx::SqlitePool;
@@ -33,14 +34,21 @@ pub async fn reset_timer_data(
 ) -> Result<u64, String> {
     // 1. Stop running timer (in-memory)
     let engine = app.state::<Arc<Mutex<timer::engine::TimerEngine>>>();
-    { engine.lock().unwrap().stop(); }
+    {
+        engine.lock().unwrap().stop();
+    }
 
     // 2. Delete all time entries from DB
     let deleted = queries::delete_all_entries(&pool)
         .await
         .map_err(|e| format!("Failed to reset data: {}", e))?;
 
-    // 3. Emit event so frontend stores refresh
+    // 3. Clear persisted timer session snapshot
+    queries::delete_setting(&pool, TIMER_SESSION_KEY)
+        .await
+        .map_err(|e| format!("Failed to clear timer session: {}", e))?;
+
+    // 4. Emit event so frontend stores refresh
     let _ = app.emit("timer-stopped", ());
 
     Ok(deleted)
@@ -54,9 +62,13 @@ pub async fn set_launch_at_login(
 ) -> Result<(), String> {
     let autostart = app.autolaunch();
     if enabled {
-        autostart.enable().map_err(|e| format!("Failed to enable autostart: {}", e))?;
+        autostart
+            .enable()
+            .map_err(|e| format!("Failed to enable autostart: {}", e))?;
     } else {
-        autostart.disable().map_err(|e| format!("Failed to disable autostart: {}", e))?;
+        autostart
+            .disable()
+            .map_err(|e| format!("Failed to disable autostart: {}", e))?;
     }
     queries::set_setting(&pool, "launch_at_login", &enabled.to_string())
         .await

@@ -1,6 +1,6 @@
-use serde::Serialize;
+use chrono::{DateTime, NaiveDateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
 use tauri::{AppHandle, Emitter};
 
 #[derive(Debug, Clone)]
@@ -8,7 +8,7 @@ pub enum TimerState {
     Idle,
     Running {
         task_id: String,
-        start_instant: Instant,
+        started_at_utc: DateTime<Utc>,
         accumulated_secs: u64,
     },
     Paused {
@@ -31,6 +31,15 @@ pub struct StoppedEntry {
     pub duration_secs: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersistedTimerState {
+    pub status: String,
+    pub task_id: String,
+    pub accumulated_secs: u64,
+    pub started_at_utc: Option<String>,
+}
+
 pub struct TimerEngine {
     pub state: TimerState,
 }
@@ -46,10 +55,10 @@ impl TimerEngine {
         match &self.state {
             TimerState::Idle => 0,
             TimerState::Running {
-                start_instant,
+                started_at_utc,
                 accumulated_secs,
                 ..
-            } => accumulated_secs + start_instant.elapsed().as_secs(),
+            } => accumulated_secs + elapsed_since(started_at_utc),
             TimerState::Paused { elapsed_secs, .. } => *elapsed_secs,
         }
     }
@@ -85,7 +94,7 @@ impl TimerEngine {
 
         self.state = TimerState::Running {
             task_id: task_id.to_string(),
-            start_instant: Instant::now(),
+            started_at_utc: Utc::now(),
             accumulated_secs: 0,
         };
 
@@ -104,11 +113,11 @@ impl TimerEngine {
             TimerState::Idle => None,
             TimerState::Running {
                 task_id,
-                start_instant,
+                started_at_utc,
                 accumulated_secs,
             } => Some(StoppedEntry {
                 task_id: task_id.clone(),
-                duration_secs: accumulated_secs + start_instant.elapsed().as_secs(),
+                duration_secs: accumulated_secs + elapsed_since(started_at_utc),
             }),
             TimerState::Paused {
                 task_id,
@@ -125,10 +134,10 @@ impl TimerEngine {
         match &self.state {
             TimerState::Running {
                 task_id,
-                start_instant,
+                started_at_utc,
                 accumulated_secs,
             } => {
-                let elapsed = accumulated_secs + start_instant.elapsed().as_secs();
+                let elapsed = accumulated_secs + elapsed_since(started_at_utc);
                 self.state = TimerState::Paused {
                     task_id: task_id.clone(),
                     elapsed_secs: elapsed,
@@ -148,13 +157,78 @@ impl TimerEngine {
             } => {
                 self.state = TimerState::Running {
                     task_id: task_id.clone(),
-                    start_instant: Instant::now(),
+                    started_at_utc: Utc::now(),
                     accumulated_secs: *elapsed_secs,
                 };
                 Ok(())
             }
             _ => Err("No timer is paused.".to_string()),
         }
+    }
+
+    pub fn persisted_state(&self) -> Option<PersistedTimerState> {
+        match &self.state {
+            TimerState::Idle => None,
+            TimerState::Running {
+                task_id,
+                started_at_utc,
+                accumulated_secs,
+            } => Some(PersistedTimerState {
+                status: "running".to_string(),
+                task_id: task_id.clone(),
+                accumulated_secs: *accumulated_secs,
+                started_at_utc: Some(started_at_utc.to_rfc3339()),
+            }),
+            TimerState::Paused {
+                task_id,
+                elapsed_secs,
+            } => Some(PersistedTimerState {
+                status: "paused".to_string(),
+                task_id: task_id.clone(),
+                accumulated_secs: *elapsed_secs,
+                started_at_utc: None,
+            }),
+        }
+    }
+
+    pub fn restore_from_persisted(
+        &mut self,
+        persisted: &PersistedTimerState,
+        fallback_started_at_utc: Option<DateTime<Utc>>,
+    ) -> Result<(), String> {
+        match persisted.status.as_str() {
+            "running" => {
+                let started_at_utc = persisted
+                    .started_at_utc
+                    .as_deref()
+                    .and_then(parse_utc_timestamp)
+                    .or(fallback_started_at_utc)
+                    .ok_or_else(|| "Missing started_at_utc for running timer.".to_string())?;
+
+                self.state = TimerState::Running {
+                    task_id: persisted.task_id.clone(),
+                    started_at_utc,
+                    accumulated_secs: persisted.accumulated_secs,
+                };
+                Ok(())
+            }
+            "paused" => {
+                self.state = TimerState::Paused {
+                    task_id: persisted.task_id.clone(),
+                    elapsed_secs: persisted.accumulated_secs,
+                };
+                Ok(())
+            }
+            other => Err(format!("Invalid persisted timer status: {}", other)),
+        }
+    }
+
+    pub fn restore_running_from_start(&mut self, task_id: String, started_at_utc: DateTime<Utc>) {
+        self.state = TimerState::Running {
+            task_id,
+            started_at_utc,
+            accumulated_secs: 0,
+        };
     }
 }
 
@@ -164,11 +238,11 @@ pub fn update_tray_now(app: &AppHandle, engine: &TimerEngine) {
     if let Some(tray) = app.tray_by_id("main-tray") {
         let title = match &engine.state {
             TimerState::Running {
-                start_instant,
+                started_at_utc,
                 accumulated_secs,
                 ..
             } => {
-                let elapsed = accumulated_secs + start_instant.elapsed().as_secs();
+                let elapsed = accumulated_secs + elapsed_since(started_at_utc);
                 format!("\u{25CF} {}", format_elapsed(elapsed))
             }
             TimerState::Paused { elapsed_secs, .. } => {
@@ -223,4 +297,30 @@ fn format_elapsed(secs: u64) -> String {
     let m = (secs % 3600) / 60;
     let s = secs % 60;
     format!("{:02}:{:02}:{:02}", h, m, s)
+}
+
+fn elapsed_since(started_at_utc: &DateTime<Utc>) -> u64 {
+    let secs = Utc::now()
+        .signed_duration_since(started_at_utc.to_owned())
+        .num_seconds();
+    if secs > 0 {
+        secs as u64
+    } else {
+        0
+    }
+}
+
+pub fn parse_utc_timestamp(value: &str) -> Option<DateTime<Utc>> {
+    if let Ok(parsed) = DateTime::parse_from_rfc3339(value) {
+        return Some(parsed.with_timezone(&Utc));
+    }
+
+    let db_formats = ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S%.f"];
+    for fmt in db_formats {
+        if let Ok(naive) = NaiveDateTime::parse_from_str(value, fmt) {
+            return Some(DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc));
+        }
+    }
+
+    None
 }

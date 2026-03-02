@@ -6,8 +6,8 @@ mod timer;
 
 use reminder::PendingOpenLog;
 
-use std::sync::{Arc, Mutex};
 use sqlx::SqlitePool;
+use std::sync::{Arc, Mutex};
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::TrayIconEvent,
@@ -16,8 +16,7 @@ use tauri::{
 use tauri_plugin_autostart::ManagerExt;
 
 pub fn run() {
-    let jira_client: Arc<Mutex<Option<jira::client::JiraClient>>> =
-        Arc::new(Mutex::new(None));
+    let jira_client: Arc<Mutex<Option<jira::client::JiraClient>>> = Arc::new(Mutex::new(None));
     let timer_engine: Arc<Mutex<timer::engine::TimerEngine>> =
         Arc::new(Mutex::new(timer::engine::TimerEngine::new()));
 
@@ -40,6 +39,7 @@ pub fn run() {
             commands::tasks::search_task,
             commands::tasks::pin_task,
             commands::tasks::unpin_task,
+            commands::tasks::get_task_detail,
             // Timer
             commands::timer::start_timer,
             commands::timer::stop_timer,
@@ -49,6 +49,7 @@ pub fn run() {
             commands::timer::quit_app,
             // Entries
             commands::timer::get_entries_today,
+            commands::timer::get_entries_range,
             commands::timer::update_entry,
             // Worklog
             commands::worklog::submit_batch_worklog,
@@ -71,7 +72,10 @@ pub fn run() {
             eprintln!("[CT] setup: start");
 
             // Initialize SQLite database
-            let app_dir = app.path().app_config_dir().expect("Failed to get app config dir");
+            let app_dir = app
+                .path()
+                .app_config_dir()
+                .expect("Failed to get app config dir");
             std::fs::create_dir_all(&app_dir).expect("Failed to create app config dir");
             let db_path = app_dir.join("catet-task.db");
             let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
@@ -87,17 +91,6 @@ pub fn run() {
                     .expect("Failed to initialize database");
                 eprintln!("[CT] setup: db initialized");
 
-                // Recover orphaned entries (crash recovery)
-                match db::queries::finalize_orphaned_entries(&pool).await {
-                    Ok(count) if count > 0 => {
-                        eprintln!("[CT] setup: recovered {} orphaned entries", count);
-                    }
-                    Err(e) => {
-                        eprintln!("[CT] setup: orphan recovery failed: {}", e);
-                    }
-                    _ => {}
-                }
-
                 pool
             });
 
@@ -105,11 +98,23 @@ pub fn run() {
             app.manage(PendingOpenLog(std::sync::Mutex::new(false)));
             eprintln!("[CT] setup: pool managed");
 
+            // Recover timer state from DB/settings so force-close and restart keep timer continuity.
+            let engine_for_recovery = app
+                .state::<Arc<Mutex<timer::engine::TimerEngine>>>()
+                .inner()
+                .clone();
+            match tauri::async_runtime::block_on(commands::timer::recover_timer_on_startup(
+                &engine_for_recovery,
+                &pool,
+            )) {
+                Ok(_) => eprintln!("[CT] setup: timer recovery complete"),
+                Err(e) => eprintln!("[CT] setup: timer recovery failed: {}", e),
+            }
+
             // Sync autostart state with saved preference
             let autostart = app.handle().autolaunch();
-            let launch_pref = tauri::async_runtime::block_on(
-                db::queries::get_setting(&pool, "launch_at_login")
-            );
+            let launch_pref =
+                tauri::async_runtime::block_on(db::queries::get_setting(&pool, "launch_at_login"));
             match launch_pref {
                 Ok(Some(val)) if val == "true" => {
                     let _ = autostart.enable();
@@ -153,8 +158,13 @@ pub fn run() {
                 tray.on_tray_icon_event(move |tray, event| {
                     let is_left_click = matches!(
                         event,
-                        TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, .. }
-                            | TrayIconEvent::DoubleClick { button: tauri::tray::MouseButton::Left, .. }
+                        TrayIconEvent::Click {
+                            button: tauri::tray::MouseButton::Left,
+                            ..
+                        } | TrayIconEvent::DoubleClick {
+                            button: tauri::tray::MouseButton::Left,
+                            ..
+                        }
                     );
                     if is_left_click {
                         let app = tray.app_handle();
@@ -182,18 +192,31 @@ pub fn run() {
                             eng.stop()
                         };
 
-                        if let Some(entry) = stopped {
-                            let pool = pool.inner().clone();
-                            let app_handle = app.clone();
-                            tauri::async_runtime::spawn(async move {
-                                if let Ok(Some(running)) = db::queries::get_running_entry_for_task(&pool, &entry.task_id).await {
-                                    let _ = db::queries::finalize_entry(&pool, running.id, entry.duration_secs as i64).await;
+                        let pool = pool.inner().clone();
+                        let app_handle = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if let Some(entry) = stopped {
+                                if let Ok(Some(running)) =
+                                    db::queries::get_running_entry_for_task(&pool, &entry.task_id)
+                                        .await
+                                {
+                                    let _ = db::queries::finalize_entry(
+                                        &pool,
+                                        running.id,
+                                        entry.duration_secs as i64,
+                                    )
+                                    .await;
                                 }
-                                app_handle.exit(0);
-                            });
-                        } else {
-                            app.exit(0);
-                        }
+                            }
+
+                            let _ = db::queries::delete_setting(
+                                &pool,
+                                commands::timer::TIMER_SESSION_KEY,
+                            )
+                            .await;
+
+                            app_handle.exit(0);
+                        });
                     }
                 });
             } else {
@@ -212,9 +235,19 @@ pub fn run() {
 
             // Start the timer tick loop
             let app_handle = app.handle().clone();
-            let engine = app.state::<Arc<Mutex<timer::engine::TimerEngine>>>().inner().clone();
+            let engine = app
+                .state::<Arc<Mutex<timer::engine::TimerEngine>>>()
+                .inner()
+                .clone();
             timer::engine::start_tick_loop(app_handle.clone(), engine);
             eprintln!("[CT] setup: tick loop started");
+
+            // Apply tray title immediately after recovery.
+            {
+                let engine = app.state::<Arc<Mutex<timer::engine::TimerEngine>>>();
+                let eng = engine.lock().unwrap();
+                timer::engine::update_tray_now(&app_handle, &eng);
+            }
 
             // Start the daily reminder loop
             reminder::start_reminder_loop(app_handle.clone(), pool.clone());

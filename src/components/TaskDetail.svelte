@@ -1,18 +1,25 @@
 <script lang="ts">
-  import type { Task, TimeEntry } from '$lib/types';
+  import { onMount } from 'svelte';
+  import type { Task, TaskDetailData, TimeEntry } from '$lib/types';
   import { getStatus, getTaskId, getElapsedSecs, toggle } from '$lib/stores/timer.svelte';
   import { getEntries } from '$lib/stores/entries.svelte';
   import { togglePin } from '$lib/stores/tasks.svelte';
+  import { getTaskDetail } from '$lib/api/tauri';
   import Badge from './shared/Badge.svelte';
-  import { formatDuration, formatTime } from '$lib/utils/time';
+  import { formatDateTime, formatDuration, formatTime, getLocalTimezoneLabel } from '$lib/utils/time';
 
   let { task, onBack }: { task: Task; onBack: () => void } = $props();
 
-  let isActive   = $derived(getTaskId() === task.id && getStatus() !== 'idle');
-  let isRunning  = $derived(getTaskId() === task.id && getStatus() === 'running');
-  let isPaused   = $derived(getTaskId() === task.id && getStatus() === 'paused');
+  let isActive = $derived(getTaskId() === task.id && getStatus() !== 'idle');
+  let isRunning = $derived(getTaskId() === task.id && getStatus() === 'running');
+  let isPaused = $derived(getTaskId() === task.id && getStatus() === 'paused');
 
   let taskEntries = $derived(getEntries().filter((e: TimeEntry) => e.taskId === task.id));
+  let timezone = $derived(getLocalTimezoneLabel());
+
+  let detail = $state<TaskDetailData | null>(null);
+  let detailLoading = $state(false);
+  let detailError = $state('');
 
   let totalSecs = $derived.by(() => {
     let sum = 0;
@@ -38,10 +45,27 @@
     if (entry.endTime === null) return isActive ? getElapsedSecs() : 0;
     return entry.adjustedSecs ?? entry.durationSecs ?? 0;
   }
+
+  async function loadTaskDetail() {
+    detailLoading = true;
+    detailError = '';
+    try {
+      detail = await getTaskDetail(task.id);
+    } catch (e: any) {
+      detail = null;
+      detailError = typeof e === 'string' ? e : e?.message || 'Failed to load task detail';
+    } finally {
+      detailLoading = false;
+    }
+  }
+
+  onMount(() => {
+    loadTaskDetail();
+  });
 </script>
 
 <div class="detail">
-  <button class="back-btn" onclick={onBack}>← Back</button>
+  <button class="back-btn" onclick={onBack}>&larr; Back</button>
 
   <div class="task-header">
     <div class="task-key-row">
@@ -50,13 +74,36 @@
     </div>
     <div class="task-summary">{task.summary}</div>
     <div class="task-meta">
-      {task.projectName || task.projectKey}{task.sprintName ? ` · ${task.sprintName}` : ''}
+      {task.projectName || task.projectKey}{task.sprintName ? ` - ${task.sprintName}` : ''}
     </div>
   </div>
 
   <div class="time-section">
     <span class="time-label">TODAY'S TIME</span>
     <span class="time-total">{formatDuration(totalSecs)}</span>
+  </div>
+
+  <div class="detail-meta">
+    <div class="detail-meta-label">TASK DETAIL</div>
+    {#if detailLoading}
+      <div class="detail-row muted">Loading task metadata...</div>
+    {:else if detailError}
+      <div class="detail-row muted">{detailError}</div>
+    {:else if detail}
+      <div class="detail-grid">
+        <div class="detail-row"><span class="k">Type</span><span class="v">{detail.issueType ?? '-'}</span></div>
+        <div class="detail-row"><span class="k">Priority</span><span class="v">{detail.priority ?? '-'}</span></div>
+        <div class="detail-row"><span class="k">Assignee</span><span class="v">{detail.assignee ?? '-'}</span></div>
+        <div class="detail-row"><span class="k">Created</span><span class="v">{detail.createdAt ? formatDateTime(detail.createdAt) : '-'}</span></div>
+        <div class="detail-row"><span class="k">Updated</span><span class="v">{detail.updatedAt ? formatDateTime(detail.updatedAt) : '-'}</span></div>
+      </div>
+      {#if detail.description}
+        <div class="desc">
+          <div class="k">Description</div>
+          <div class="desc-text">{detail.description}</div>
+        </div>
+      {/if}
+    {/if}
   </div>
 
   <!-- svelte-ignore a11y_consider_explicit_label -->
@@ -66,17 +113,17 @@
     class:paused={isPaused}
     onclick={() => toggle(task.id)}
   >
-    {#if isRunning}⏸ Pause{:else if isPaused}▶ Resume{:else}▶ Start Timer{/if}
+    {#if isRunning}Pause{:else if isPaused}Resume{:else}Start Timer{/if}
   </button>
 
   {#if taskEntries.length > 0}
     <div class="segments">
-      <div class="segments-label">TIME SEGMENTS</div>
+      <div class="segments-label">TIME SEGMENTS - LOCAL ({timezone})</div>
       {#each taskEntries as entry (entry.id)}
         <div class="segment" class:synced={entry.syncedToJira}>
           <div class="seg-range">
             <span>{formatTime(entry.startTime)}</span>
-            <span class="seg-sep">–</span>
+            <span class="seg-sep">-</span>
             {#if entry.endTime}
               <span>{formatTime(entry.endTime)}</span>
             {:else}
@@ -86,9 +133,9 @@
           <div class="seg-right">
             <span class="seg-dur">{formatDuration(segmentDuration(entry))}</span>
             {#if entry.syncedToJira}
-              <span class="seg-check">✓</span>
+              <span class="seg-check">sync</span>
             {:else if entry.endTime === null}
-              <span class="seg-live">●</span>
+              <span class="seg-live">live</span>
             {/if}
           </div>
         </div>
@@ -100,7 +147,7 @@
 
   <!-- svelte-ignore a11y_consider_explicit_label -->
   <button class="pin-btn" onclick={() => togglePin(task.id)}>
-    {task.pinned ? '★ Unpin' : '☆ Pin'}
+    {task.pinned ? 'Unpin' : 'Pin'}
   </button>
 </div>
 
@@ -193,6 +240,71 @@
     font-family: var(--font-mono);
     color: var(--accent-green);
     letter-spacing: 1px;
+  }
+
+  .detail-meta {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+
+  .detail-meta-label {
+    font-size: 9px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .detail-grid {
+    display: grid;
+    gap: 4px;
+  }
+
+  .detail-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  .detail-row .k,
+  .desc .k {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-size: 10px;
+  }
+
+  .detail-row .v {
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    text-align: right;
+  }
+
+  .detail-row.muted {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+
+  .desc {
+    margin-top: 8px;
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+  }
+
+  .desc-text {
+    margin-top: 4px;
+    white-space: pre-wrap;
+    line-height: 1.4;
+    color: var(--text-primary);
+    font-size: 12px;
   }
 
   .play-btn {
@@ -295,14 +407,15 @@
     color: var(--text-primary);
   }
 
-  .seg-check {
-    font-size: 11px;
+  .seg-check,
+  .seg-live {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
     color: var(--accent-green);
   }
 
   .seg-live {
-    font-size: 8px;
-    color: var(--accent-green);
     animation: pulse-live 1.5s ease-in-out infinite;
   }
 
