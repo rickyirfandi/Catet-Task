@@ -28,6 +28,25 @@ export function parseAppDate(value: string): Date | null {
   return null;
 }
 
+/** Format a Date into local YYYY-MM-DD key */
+export function toLocalDateKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** Convert an app datetime string into local YYYY-MM-DD, if parsable */
+export function toLocalDateKeyFromValue(value: string): string | null {
+  const parsed = parseAppDate(value);
+  return parsed ? toLocalDateKey(parsed) : null;
+}
+
+/** Current local date key in YYYY-MM-DD */
+export function getTodayLocalDateKey(): string {
+  return toLocalDateKey(new Date());
+}
+
 /** Format seconds as HH:MM:SS */
 export function formatDuration(totalSecs: number): string {
   const h = Math.floor(totalSecs / 3600);

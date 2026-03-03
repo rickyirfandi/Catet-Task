@@ -3,7 +3,12 @@
   import CommentField from './shared/CommentField.svelte';
   import { getTasks } from '$lib/stores/tasks.svelte';
   import { updateEntry } from '$lib/api/tauri';
-  import { formatTime, formatDurationShort } from '$lib/utils/time';
+  import {
+    formatTime,
+    formatDurationShort,
+    getTodayLocalDateKey,
+    toLocalDateKeyFromValue,
+  } from '$lib/utils/time';
   import type { TimeEntry } from '$lib/types';
 
   interface Props {
@@ -16,11 +21,11 @@
 
   let adjustedSecs = $state(entry.adjustedSecs ?? entry.durationSecs ?? 0);
   let description = $state(entry.description ?? '');
-  let date = $state(entry.startTime.split('T')[0]);
+  let date = $state(toLocalDateKeyFromValue(entry.startTime) ?? getTodayLocalDateKey());
 
   let task = $derived(getTasks().find(t => t.id === entry.taskId));
   let rawSecs = $derived(entry.durationSecs ?? 0);
-  let isToday = $derived(date === new Date().toISOString().split('T')[0]);
+  let isToday = $derived(date === getTodayLocalDateKey());
 
   async function handleSave() {
     try {

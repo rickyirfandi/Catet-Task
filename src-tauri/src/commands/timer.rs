@@ -1,9 +1,10 @@
 use crate::db::queries;
 use crate::jira::models::{AppTimeEntry, AppTimerState};
 use crate::timer::engine::{self, PersistedTimerState, StoppedEntry, TimerEngine};
+use chrono::{DateTime, Utc};
 use sqlx::SqlitePool;
 use std::sync::{Arc, Mutex};
-use tauri::State;
+use tauri::{Manager, State};
 
 pub const TIMER_SESSION_KEY: &str = "timer_session_v1";
 
@@ -62,6 +63,39 @@ async fn load_persisted_timer_session(
     }
 }
 
+async fn set_timer_heartbeat_now(pool: &SqlitePool) -> Result<(), String> {
+    queries::set_setting(pool, engine::TIMER_HEARTBEAT_KEY, &Utc::now().to_rfc3339())
+        .await
+        .map_err(|e| format!("Failed to persist timer heartbeat: {}", e))
+}
+
+async fn clear_timer_heartbeat(pool: &SqlitePool) -> Result<(), String> {
+    queries::delete_setting(pool, engine::TIMER_HEARTBEAT_KEY)
+        .await
+        .map_err(|e| format!("Failed to clear timer heartbeat: {}", e))
+}
+
+async fn load_timer_heartbeat(pool: &SqlitePool) -> Result<Option<DateTime<Utc>>, String> {
+    let raw = queries::get_setting(pool, engine::TIMER_HEARTBEAT_KEY)
+        .await
+        .map_err(|e| format!("Failed to load timer heartbeat: {}", e))?;
+
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+
+    match engine::parse_utc_timestamp(&raw) {
+        Some(ts) => Ok(Some(ts)),
+        None => {
+            eprintln!(
+                "[CT] timer recovery: invalid heartbeat timestamp, dropping: {}",
+                raw
+            );
+            Ok(None)
+        }
+    }
+}
+
 async fn finalize_stopped_entry(pool: &SqlitePool, stopped: &StoppedEntry) -> Result<(), String> {
     if let Some(entry) = queries::get_running_entry_for_task(pool, &stopped.task_id)
         .await
@@ -97,11 +131,22 @@ pub async fn recover_timer_on_startup(
     }
 
     let persisted = load_persisted_timer_session(pool).await?;
+    let heartbeat = match load_timer_heartbeat(pool).await {
+        Ok(value) => value,
+        Err(e) => {
+            eprintln!("[CT] timer recovery: failed to load heartbeat: {}", e);
+            None
+        }
+    };
     let fallback_started_at_utc = primary_open_entry
         .as_ref()
         .and_then(|entry| engine::parse_utc_timestamp(&entry.start_time));
 
-    let (session_to_persist, should_finalize_unrecoverable_open) = {
+    let (
+        session_to_persist,
+        should_finalize_unrecoverable_open,
+        should_keep_heartbeat,
+    ) = {
         let mut eng = engine_state.lock().unwrap();
         let mut recovered = false;
         let mut should_finalize_unrecoverable_open = false;
@@ -147,7 +192,24 @@ pub async fn recover_timer_on_startup(
             let _ = eng.stop();
         }
 
-        (eng.persisted_state(), should_finalize_unrecoverable_open)
+        if recovered {
+            if let Some(last_heartbeat) = heartbeat {
+                if let Some(excluded_secs) = eng.compensate_external_inactive_gap(last_heartbeat) {
+                    eprintln!(
+                        "[CT] timer recovery: excluded {}s from force-close/sleep downtime",
+                        excluded_secs
+                    );
+                }
+            }
+        }
+
+        let should_keep_heartbeat = eng.get_status_str() == "running";
+
+        (
+            eng.persisted_state(),
+            should_finalize_unrecoverable_open,
+            should_keep_heartbeat,
+        )
     };
 
     if should_finalize_unrecoverable_open {
@@ -163,6 +225,14 @@ pub async fn recover_timer_on_startup(
     }
 
     persist_timer_session(pool, session_to_persist).await?;
+    if should_keep_heartbeat {
+        if let Err(e) = set_timer_heartbeat_now(pool).await {
+            eprintln!("[CT] timer recovery: heartbeat persist failed: {}", e);
+        }
+    } else if let Err(e) = clear_timer_heartbeat(pool).await {
+        eprintln!("[CT] timer recovery: heartbeat clear failed: {}", e);
+    }
+
     Ok(())
 }
 
@@ -194,10 +264,14 @@ pub async fn start_timer(
             engine::update_tray_now(&app, &eng);
         }
         let _ = persist_timer_session(&pool, None).await;
+        let _ = clear_timer_heartbeat(&pool).await;
         return Err(format!("Failed to create time entry: {}", e));
     }
 
     persist_timer_session(&pool, session_after_start).await?;
+    if let Err(e) = set_timer_heartbeat_now(&pool).await {
+        eprintln!("[CT] start_timer: heartbeat persist failed: {}", e);
+    }
 
     Ok(())
 }
@@ -221,6 +295,9 @@ pub async fn stop_timer(
     }
 
     persist_timer_session(&pool, session_after_stop).await?;
+    if let Err(e) = clear_timer_heartbeat(&pool).await {
+        eprintln!("[CT] stop_timer: heartbeat clear failed: {}", e);
+    }
 
     Ok(())
 }
@@ -239,6 +316,9 @@ pub async fn pause_timer(
     };
 
     persist_timer_session(&pool, session_after_pause).await?;
+    if let Err(e) = clear_timer_heartbeat(&pool).await {
+        eprintln!("[CT] pause_timer: heartbeat clear failed: {}", e);
+    }
     Ok(())
 }
 
@@ -256,6 +336,9 @@ pub async fn resume_timer(
     };
 
     persist_timer_session(&pool, session_after_resume).await?;
+    if let Err(e) = set_timer_heartbeat_now(&pool).await {
+        eprintln!("[CT] resume_timer: heartbeat persist failed: {}", e);
+    }
     Ok(())
 }
 
@@ -263,11 +346,12 @@ pub async fn resume_timer(
 pub async fn get_active_timer(
     engine_state: State<'_, Arc<Mutex<TimerEngine>>>,
 ) -> Result<AppTimerState, String> {
-    let engine = engine_state.lock().unwrap();
+    let mut engine = engine_state.lock().unwrap();
+    let payload = engine.get_tick_payload();
     Ok(AppTimerState {
-        status: engine.get_status_str().to_string(),
-        task_id: engine.get_task_id(),
-        elapsed_secs: engine.get_elapsed(),
+        status: payload.status,
+        task_id: payload.task_id,
+        elapsed_secs: payload.elapsed_secs,
     })
 }
 
@@ -330,7 +414,11 @@ pub async fn quit_app(
     }
 
     persist_timer_session(&pool, session_after_stop).await?;
+    if let Err(e) = clear_timer_heartbeat(&pool).await {
+        eprintln!("[CT] quit_app: heartbeat clear failed: {}", e);
+    }
 
+    app.state::<crate::ExitControl>().request_exit();
     app.exit(0);
     Ok(())
 }

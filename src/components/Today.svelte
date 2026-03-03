@@ -3,7 +3,12 @@
   import type { AggregatedEntry } from '$lib/stores/entries.svelte';
   import { getTasks } from '$lib/stores/tasks.svelte';
   import { getElapsedSecs, getTaskId, getStatus, stop as stopTimer } from '$lib/stores/timer.svelte';
-  import { formatDuration, formatDurationShort, formatDateHeader } from '$lib/utils/time';
+  import {
+    formatDuration,
+    formatDurationShort,
+    formatDateHeader,
+    getTodayLocalDateKey,
+  } from '$lib/utils/time';
   import type { TimeEntry } from '$lib/types';
   import { onMount } from 'svelte';
 
@@ -137,7 +142,7 @@
     ];
     const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getTodayLocalDateKey();
     const a = document.createElement('a');
     a.href = url;
     a.download = `ct-export-${today}.csv`;

@@ -1,12 +1,14 @@
 mod commands;
 mod db;
 mod jira;
+mod power;
 mod reminder;
 mod timer;
 
 use reminder::PendingOpenLog;
 
 use sqlx::SqlitePool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
@@ -14,6 +16,22 @@ use tauri::{
     Emitter, Manager, RunEvent, WindowEvent,
 };
 use tauri_plugin_autostart::ManagerExt;
+
+pub struct ExitControl(AtomicBool);
+
+impl ExitControl {
+    pub fn new() -> Self {
+        Self(AtomicBool::new(false))
+    }
+
+    pub fn request_exit(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+
+    pub fn should_allow_exit(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+}
 
 pub fn run() {
     let jira_client: Arc<Mutex<Option<jira::client::JiraClient>>> = Arc::new(Mutex::new(None));
@@ -28,6 +46,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .manage(jira_client)
         .manage(timer_engine)
+        .manage(ExitControl::new())
         .invoke_handler(tauri::generate_handler![
             // Auth
             commands::auth::jira_login,
@@ -214,7 +233,13 @@ pub fn run() {
                                 commands::timer::TIMER_SESSION_KEY,
                             )
                             .await;
+                            let _ = db::queries::delete_setting(
+                                &pool,
+                                timer::engine::TIMER_HEARTBEAT_KEY,
+                            )
+                            .await;
 
+                            app_handle.state::<ExitControl>().request_exit();
                             app_handle.exit(0);
                         });
                     }
@@ -241,6 +266,12 @@ pub fn run() {
                 .clone();
             timer::engine::start_tick_loop(app_handle.clone(), engine);
             eprintln!("[CT] setup: tick loop started");
+
+            #[cfg(target_os = "macos")]
+            {
+                power::register_power_notifications(app_handle.clone(), engine.clone());
+                eprintln!("[CT] setup: macOS power notifications registered");
+            }
 
             // Apply tray title immediately after recovery.
             {
@@ -274,11 +305,14 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app, event| {
+        .run(|app, event| {
             // Prevent the app from exiting when the last window is hidden.
             // Essential for tray-only apps on macOS.
             if let RunEvent::ExitRequested { api, .. } = event {
-                api.prevent_exit();
+                let exit_control = app.state::<ExitControl>();
+                if !exit_control.should_allow_exit() {
+                    api.prevent_exit();
+                }
             }
         });
 }

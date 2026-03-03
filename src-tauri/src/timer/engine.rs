@@ -1,7 +1,11 @@
-use chrono::{DateTime, NaiveDateTime, Utc};
+use crate::db::queries;
+use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sqlx::SqlitePool;
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
+
+pub const TIMER_HEARTBEAT_KEY: &str = "timer_heartbeat_utc_v1";
 
 #[derive(Debug, Clone)]
 pub enum TimerState {
@@ -42,13 +46,106 @@ pub struct PersistedTimerState {
 
 pub struct TimerEngine {
     pub state: TimerState,
+    last_observed_utc: DateTime<Utc>,
+    sleep_started_at_utc: Option<DateTime<Utc>>,
 }
 
 impl TimerEngine {
     pub fn new() -> Self {
         Self {
             state: TimerState::Idle,
+            last_observed_utc: Utc::now(),
+            sleep_started_at_utc: None,
         }
+    }
+
+    /// Detect long inactivity gaps (typically laptop sleep/close-lid) and
+    /// exclude that downtime from a running timer.
+    ///
+    /// Returns the excluded seconds when compensation was applied.
+    pub fn compensate_inactive_gap(&mut self) -> Option<u64> {
+        const INACTIVE_GAP_THRESHOLD_SECS: i64 = 20;
+
+        let now_utc = Utc::now();
+        let gap_secs = now_utc
+            .signed_duration_since(self.last_observed_utc)
+            .num_seconds();
+        self.last_observed_utc = now_utc;
+
+        if gap_secs <= INACTIVE_GAP_THRESHOLD_SECS {
+            return None;
+        }
+
+        // Subtract one expected tick second; exclude only the true inactivity window.
+        let inactive_gap_secs = (gap_secs - 1) as u64;
+
+        if let TimerState::Running { started_at_utc, .. } = &mut self.state {
+            *started_at_utc =
+                started_at_utc.to_owned() + Duration::seconds(inactive_gap_secs as i64);
+            return Some(inactive_gap_secs);
+        }
+
+        None
+    }
+
+    /// Compensate downtime across process restarts using persisted heartbeat.
+    /// This handles force-close scenarios where in-memory gap tracking is unavailable.
+    pub fn compensate_external_inactive_gap(&mut self, last_active_utc: DateTime<Utc>) -> Option<u64> {
+        const INACTIVE_GAP_THRESHOLD_SECS: i64 = 20;
+
+        let now_utc = Utc::now();
+        let gap_secs = now_utc
+            .signed_duration_since(last_active_utc)
+            .num_seconds();
+
+        self.last_observed_utc = now_utc;
+
+        if gap_secs <= INACTIVE_GAP_THRESHOLD_SECS {
+            return None;
+        }
+
+        let inactive_gap_secs = (gap_secs - 1) as u64;
+
+        if let TimerState::Running { started_at_utc, .. } = &mut self.state {
+            *started_at_utc =
+                started_at_utc.to_owned() + Duration::seconds(inactive_gap_secs as i64);
+            return Some(inactive_gap_secs);
+        }
+
+        None
+    }
+
+    /// macOS sleep callback hook. Marks sleep start for precise wake compensation.
+    #[cfg_attr(not(any(target_os = "macos", test)), allow(dead_code))]
+    pub fn on_system_will_sleep(&mut self) {
+        let now_utc = Utc::now();
+        if matches!(self.state, TimerState::Running { .. }) {
+            self.sleep_started_at_utc = Some(now_utc);
+        } else {
+            self.sleep_started_at_utc = None;
+        }
+        self.last_observed_utc = now_utc;
+    }
+
+    /// macOS wake callback hook. Excludes exact sleep interval from running timer.
+    #[cfg_attr(not(any(target_os = "macos", test)), allow(dead_code))]
+    pub fn on_system_did_wake(&mut self) -> Option<u64> {
+        let now_utc = Utc::now();
+        let excluded = match (&mut self.state, self.sleep_started_at_utc.take()) {
+            (TimerState::Running { started_at_utc, .. }, Some(slept_at_utc)) => {
+                let sleep_secs = now_utc.signed_duration_since(slept_at_utc).num_seconds();
+                if sleep_secs > 0 {
+                    *started_at_utc =
+                        started_at_utc.to_owned() + Duration::seconds(sleep_secs);
+                    Some(sleep_secs as u64)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        self.last_observed_utc = now_utc;
+        excluded
     }
 
     pub fn get_elapsed(&self) -> u64 {
@@ -79,7 +176,8 @@ impl TimerEngine {
         }
     }
 
-    pub fn get_tick_payload(&self) -> TimerTickPayload {
+    pub fn get_tick_payload(&mut self) -> TimerTickPayload {
+        let _ = self.compensate_inactive_gap();
         TimerTickPayload {
             status: self.get_status_str().to_string(),
             task_id: self.get_task_id(),
@@ -97,6 +195,8 @@ impl TimerEngine {
             started_at_utc: Utc::now(),
             accumulated_secs: 0,
         };
+        self.last_observed_utc = Utc::now();
+        self.sleep_started_at_utc = None;
 
         stopped
     }
@@ -105,10 +205,12 @@ impl TimerEngine {
     pub fn stop(&mut self) -> Option<StoppedEntry> {
         let stopped = self.stop_internal();
         self.state = TimerState::Idle;
+        self.sleep_started_at_utc = None;
         stopped
     }
 
     fn stop_internal(&mut self) -> Option<StoppedEntry> {
+        let _ = self.compensate_inactive_gap();
         match &self.state {
             TimerState::Idle => None,
             TimerState::Running {
@@ -131,6 +233,7 @@ impl TimerEngine {
 
     /// Pause the current timer.
     pub fn pause(&mut self) -> Result<(), String> {
+        let _ = self.compensate_inactive_gap();
         match &self.state {
             TimerState::Running {
                 task_id,
@@ -142,6 +245,7 @@ impl TimerEngine {
                     task_id: task_id.clone(),
                     elapsed_secs: elapsed,
                 };
+                self.sleep_started_at_utc = None;
                 Ok(())
             }
             _ => Err("No timer is running.".to_string()),
@@ -160,6 +264,8 @@ impl TimerEngine {
                     started_at_utc: Utc::now(),
                     accumulated_secs: *elapsed_secs,
                 };
+                self.last_observed_utc = Utc::now();
+                self.sleep_started_at_utc = None;
                 Ok(())
             }
             _ => Err("No timer is paused.".to_string()),
@@ -210,6 +316,8 @@ impl TimerEngine {
                     started_at_utc,
                     accumulated_secs: persisted.accumulated_secs,
                 };
+                self.last_observed_utc = Utc::now();
+                self.sleep_started_at_utc = None;
                 Ok(())
             }
             "paused" => {
@@ -217,6 +325,8 @@ impl TimerEngine {
                     task_id: persisted.task_id.clone(),
                     elapsed_secs: persisted.accumulated_secs,
                 };
+                self.last_observed_utc = Utc::now();
+                self.sleep_started_at_utc = None;
                 Ok(())
             }
             other => Err(format!("Invalid persisted timer status: {}", other)),
@@ -229,6 +339,8 @@ impl TimerEngine {
             started_at_utc,
             accumulated_secs: 0,
         };
+        self.last_observed_utc = Utc::now();
+        self.sleep_started_at_utc = None;
     }
 }
 
@@ -260,15 +372,44 @@ pub fn update_tray_now(app: &AppHandle, engine: &TimerEngine) {
 
 /// Spawns an async task that ticks every second, updating the tray title and emitting events.
 pub fn start_tick_loop(app: AppHandle, engine: Arc<Mutex<TimerEngine>>) {
+    let pool = app.state::<SqlitePool>().inner().clone();
+
     tauri::async_runtime::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
+        let mut last_heartbeat_write: Option<DateTime<Utc>> = None;
+
         loop {
             interval.tick().await;
 
             let payload = {
-                let engine = engine.lock().unwrap();
+                let mut engine = engine.lock().unwrap();
                 engine.get_tick_payload()
             };
+
+            if payload.status == "running" {
+                let now_utc = Utc::now();
+                let should_write = match last_heartbeat_write {
+                    Some(prev) => now_utc.signed_duration_since(prev).num_seconds() >= 5,
+                    None => true,
+                };
+
+                if should_write {
+                    if let Err(e) =
+                        queries::set_setting(&pool, TIMER_HEARTBEAT_KEY, &now_utc.to_rfc3339())
+                            .await
+                    {
+                        eprintln!("[CT] heartbeat persist failed: {e}");
+                    } else {
+                        last_heartbeat_write = Some(now_utc);
+                    }
+                }
+            } else if last_heartbeat_write.is_some() {
+                if let Err(e) = queries::delete_setting(&pool, TIMER_HEARTBEAT_KEY).await {
+                    eprintln!("[CT] heartbeat clear failed: {e}");
+                } else {
+                    last_heartbeat_write = None;
+                }
+            }
 
             if let Some(tray) = app.tray_by_id("main-tray") {
                 let title = match payload.status.as_str() {
@@ -323,4 +464,72 @@ pub fn parse_utc_timestamp(value: &str) -> Option<DateTime<Utc>> {
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn running_engine_with_offsets(total_secs: i64, gap_secs: i64) -> TimerEngine {
+        let now = Utc::now();
+        let mut engine = TimerEngine::new();
+        engine.state = TimerState::Running {
+            task_id: "TEST-1".to_string(),
+            started_at_utc: now - Duration::seconds(total_secs),
+            accumulated_secs: 0,
+        };
+        engine.last_observed_utc = now - Duration::seconds(gap_secs);
+        engine
+    }
+
+    #[test]
+    fn compensate_inactive_gap_excludes_large_gap_when_running() {
+        let mut engine = running_engine_with_offsets(120, 60);
+        let excluded = engine.compensate_inactive_gap();
+        assert!(excluded.is_some());
+        let excluded_secs = excluded.unwrap();
+        assert!((58..=62).contains(&excluded_secs));
+
+        let elapsed = engine.get_elapsed();
+        assert!((57..=66).contains(&elapsed));
+    }
+
+    #[test]
+    fn compensate_inactive_gap_ignores_small_gap() {
+        let mut engine = running_engine_with_offsets(10, 5);
+        let excluded = engine.compensate_inactive_gap();
+        assert!(excluded.is_none());
+    }
+
+    #[test]
+    fn compensate_external_gap_only_applies_to_running_state() {
+        let mut engine = TimerEngine::new();
+        engine.state = TimerState::Paused {
+            task_id: "TEST-2".to_string(),
+            elapsed_secs: 123,
+        };
+
+        let excluded = engine.compensate_external_inactive_gap(Utc::now() - Duration::seconds(90));
+        assert!(excluded.is_none());
+    }
+
+    #[test]
+    fn system_wake_excludes_recorded_sleep_for_running_timer() {
+        let now = Utc::now();
+        let mut engine = TimerEngine::new();
+        engine.state = TimerState::Running {
+            task_id: "TEST-3".to_string(),
+            started_at_utc: now - Duration::seconds(120),
+            accumulated_secs: 0,
+        };
+        engine.sleep_started_at_utc = Some(now - Duration::seconds(30));
+
+        let excluded = engine.on_system_did_wake();
+        assert!(excluded.is_some());
+        let excluded_secs = excluded.unwrap();
+        assert!((29..=33).contains(&excluded_secs));
+
+        let elapsed = engine.get_elapsed();
+        assert!((86..=94).contains(&elapsed));
+    }
 }

@@ -22,6 +22,7 @@
   let step = $state<LogFlowStep>('select');
   let roundIncrement = $state(15);
   let submitResults = $state<WorklogProgress[]>([]);
+  let submittedTasks = $state<{ taskId: string; totalSecs: number }[]>([]);
   let selectedTaskIds = $state<Set<string>>(new Set());
   let comments = $state<Record<string, string>>({});
   let expandedTaskId = $state<string | null>(null);
@@ -89,6 +90,7 @@
     submitResults = [];
 
     const selected = aggEntries.filter(e => selectedTaskIds.has(e.taskId));
+    submittedTasks = selected.map(e => ({ taskId: e.taskId, totalSecs: getRoundedSecs(e) }));
     const submissions = selected.map(e => {
       // Find the earliest entry's start time for this task
       const taskEntries = rawEntries.filter(r => r.taskId === e.taskId && !r.syncedToJira);
@@ -120,12 +122,12 @@
 
 {#if step === 'submitting'}
   <SubmitProgress
-    tasks={aggEntries.filter(e => selectedTaskIds.has(e.taskId)).map(e => ({ taskId: e.taskId, totalSecs: getRoundedSecs(e) }))}
+    tasks={submittedTasks}
     results={submitResults}
   />
 {:else if step === 'result'}
   <SuccessScreen
-    tasks={aggEntries.filter(e => selectedTaskIds.has(e.taskId)).map(e => ({ taskId: e.taskId, totalSecs: getRoundedSecs(e) }))}
+    tasks={submittedTasks}
     results={submitResults}
     onclose={onclose}
   />

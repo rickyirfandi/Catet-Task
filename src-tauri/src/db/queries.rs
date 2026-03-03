@@ -179,7 +179,10 @@ pub async fn get_open_entries(pool: &SqlitePool) -> Result<Vec<EntryRow>, sqlx::
 
 pub async fn get_entries_today(pool: &SqlitePool) -> Result<Vec<EntryRow>, sqlx::Error> {
     sqlx::query_as::<_, EntryRow>(
-        "SELECT id, task_id, start_time, end_time, duration_secs, adjusted_secs, description, synced_to_jira, jira_worklog_id FROM time_entries WHERE date(start_time) = date('now') ORDER BY start_time DESC"
+        "SELECT id, task_id, start_time, end_time, duration_secs, adjusted_secs, description, synced_to_jira, jira_worklog_id
+         FROM time_entries
+         WHERE date(start_time, 'localtime') = date('now', 'localtime')
+         ORDER BY start_time DESC"
     )
     .fetch_all(pool)
     .await
