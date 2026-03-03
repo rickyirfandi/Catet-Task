@@ -67,6 +67,9 @@ export const submitBatchWorklog = (entries: { entryIds: number[]; taskId: string
 export const quitApp = () =>
   invoke<void>('quit_app');
 
+export const openJira = (issueKey: string | null = null) =>
+  invoke<void>('open_jira', { issueKey });
+
 // ── Settings ──
 export const getSetting = (key: string) =>
   invoke<string | null>('get_setting', { key });

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { formatDurationShort } from '$lib/utils/time';
   import { getAggregatedEntries } from '$lib/stores/entries.svelte';
+  import { openJira } from '$lib/api/tauri';
   import type { WorklogProgress } from '$lib/types';
 
   interface SubmitTask {
@@ -19,6 +20,7 @@
   let logged = $derived(results.filter(r => r.status === 'done'));
   let failed = $derived(results.filter(r => r.status === 'error'));
   let hasErrors = $derived(failed.length > 0);
+  let openingJira = $state(false);
 
   // Tasks still tracking (running or not submitted)
   let submittedTaskIds = $derived(new Set(results.map(r => r.task_id)));
@@ -28,6 +30,23 @@
 
   function taskDuration(taskId: string): number {
     return tasks.find(t => t.taskId === taskId)?.totalSecs ?? 0;
+  }
+
+  function firstLoggedTaskId(): string | null {
+    if (logged.length === 0) return null;
+    return logged[0].task_id;
+  }
+
+  async function handleOpenJira() {
+    if (openingJira) return;
+    openingJira = true;
+    try {
+      await openJira(firstLoggedTaskId());
+    } catch (e) {
+      console.error('Failed to open Jira:', e);
+    } finally {
+      openingJira = false;
+    }
   }
 </script>
 
@@ -41,7 +60,11 @@
         {failed.length} entry failed — you can retry
       </div>
     {:else}
-      <div class="success-icon">&#10003;</div>
+      <div class="success-icon" aria-hidden="true">
+        <svg class="success-check" viewBox="0 0 24 24" fill="none">
+          <path d="M20 6.5L9 17.5L4 12.5" />
+        </svg>
+      </div>
       <div class="success-title">Logged!</div>
       <div class="success-detail">
         {logged.length} worklogs submitted to Jira
@@ -100,7 +123,9 @@
     {#if hasErrors}
       <button class="btn-jira">Retry Failed</button>
     {:else}
-      <button class="btn-jira">Open Jira &#8599;</button>
+      <button class="btn-jira" onclick={handleOpenJira} disabled={openingJira}>
+        {openingJira ? 'Opening...' : 'Open Jira &#8599;'}
+      </button>
     {/if}
   </div>
 </div>
@@ -131,7 +156,6 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
     margin-bottom: 4px;
     animation: scaleIn 0.3s ease-out;
   }
@@ -139,6 +163,17 @@
   .success-icon.warn {
     border-color: var(--accent-orange);
     background: var(--accent-orange-dim);
+    font-size: 24px;
+    line-height: 1;
+  }
+
+  .success-check {
+    width: 28px;
+    height: 28px;
+    stroke: var(--accent-green);
+    stroke-width: 2.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
   .success-title {
@@ -264,5 +299,10 @@
     cursor: pointer;
     font-family: var(--font-body);
     text-align: center;
+  }
+
+  .btn-jira:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
   }
 </style>

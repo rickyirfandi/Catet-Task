@@ -53,6 +53,8 @@ pub fn run() {
             commands::auth::jira_logout,
             commands::auth::jira_verify,
             commands::auth::get_current_user,
+            // App
+            commands::app::open_jira,
             // Tasks
             commands::tasks::fetch_my_tasks,
             commands::tasks::search_task,

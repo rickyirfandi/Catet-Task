@@ -6,7 +6,18 @@ on:
 
 jobs:
   build-macos:
-    runs-on: macos-latest
+    name: Build macOS (${{ matrix.artifact_name }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            target: aarch64-apple-darwin
+            artifact_name: apple-silicon
+          - runner: macos-13
+            target: x86_64-apple-darwin
+            artifact_name: intel
     steps:
       - uses: actions/checkout@v4
 
@@ -19,7 +30,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin
+          targets: ${{ matrix.target }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -68,7 +79,7 @@ jobs:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_PATH: /tmp/AuthKey.p8
         with:
-          args: --target aarch64-apple-darwin
+          args: --target ${{ matrix.target }}
 
       - name: Notarize DMG
         env:
@@ -76,7 +87,12 @@ jobs:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
-          DMG=$(find src-tauri/target/aarch64-apple-darwin/release/bundle/dmg -name "*.dmg" | head -1)
+          DMG_DIR=src-tauri/target/${{ matrix.target }}/release/bundle/dmg
+          DMG=$(find "$DMG_DIR" -name "*.dmg" | head -1)
+          if [ -z "$DMG" ]; then
+            echo "No DMG found in $DMG_DIR"
+            exit 1
+          fi
           echo "Signing DMG: $DMG"
           codesign --force --sign "$APPLE_SIGNING_IDENTITY" "$DMG"
           echo "Submitting DMG for notarization..."
@@ -95,8 +111,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: catet-task-apple-silicon
+          name: catet-task-macos-${{ matrix.artifact_name }}
           path: |
-            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
-            src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
+            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
           if-no-files-found: error
