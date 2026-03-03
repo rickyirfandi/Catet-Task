@@ -264,7 +264,7 @@ pub fn run() {
                 .state::<Arc<Mutex<timer::engine::TimerEngine>>>()
                 .inner()
                 .clone();
-            timer::engine::start_tick_loop(app_handle.clone(), engine);
+            timer::engine::start_tick_loop(app_handle.clone(), engine.clone());
             eprintln!("[CT] setup: tick loop started");
 
             #[cfg(target_os = "macos")]

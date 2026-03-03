@@ -90,6 +90,13 @@
     await quitApp();
   }
 
+  function handleOverlayKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      showResetConfirm = false;
+    }
+  }
+
   let user = $derived(getUser());
 </script>
 
@@ -139,7 +146,13 @@
         <div class="setting-name">Daily Reminder</div>
         <div class="setting-desc">Notify if unlogged entries at end of day</div>
       </div>
-      <button class="toggle" class:on={dailyReminder} onclick={toggleDailyReminder}></button>
+      <button
+        class="toggle"
+        class:on={dailyReminder}
+        type="button"
+        aria-label="Toggle daily reminder"
+        onclick={toggleDailyReminder}
+      ></button>
     </div>
 
     <div class="setting-item" class:disabled={!dailyReminder}>
@@ -178,7 +191,13 @@
         <div class="setting-name">Launch at Login</div>
         <div class="setting-desc">Start Catet Task when you log in to your computer</div>
       </div>
-      <button class="toggle" class:on={launchAtLogin} onclick={toggleLaunchAtLogin}></button>
+      <button
+        class="toggle"
+        class:on={launchAtLogin}
+        type="button"
+        aria-label="Toggle launch at login"
+        onclick={toggleLaunchAtLogin}
+      ></button>
     </div>
   </div>
 
@@ -189,10 +208,22 @@
   <p class="byline">made with ❤️ by Ricky Irfandi</p>
 
   {#if showResetConfirm}
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-    <div class="overlay" onclick={() => showResetConfirm = false}>
-      <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-      <div class="confirm-dialog" role="dialog" aria-label="Reset confirmation" onclick={(e) => e.stopPropagation()}>
+    <div
+      class="overlay"
+      role="button"
+      tabindex="0"
+      aria-label="Close reset confirmation"
+      onclick={() => showResetConfirm = false}
+      onkeydown={handleOverlayKeydown}
+    >
+      <div
+        class="confirm-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Reset confirmation"
+        tabindex="-1"
+        onclick={(e) => e.stopPropagation()}
+      >
         <div class="confirm-title">Reset All Data?</div>
         <div class="confirm-body">This will stop any running timer and permanently delete all time entries. Task cache and settings will be kept.</div>
         <div class="confirm-actions">
