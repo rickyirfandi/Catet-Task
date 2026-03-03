@@ -12,10 +12,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-14
+          - runner: macos-15
             target: aarch64-apple-darwin
             artifact_name: apple-silicon
-          - runner: macos-13
+          - runner: macos-15-intel
             target: x86_64-apple-darwin
             artifact_name: intel
     steps:
