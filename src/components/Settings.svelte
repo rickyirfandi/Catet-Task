@@ -7,7 +7,26 @@
   let launchAtLogin = $state(false);
   let dailyReminder = $state(false);
   let reminderTime = $state('17:00');
-  const reminderTimes = ['16:00', '17:00', '18:00', '19:00', '20:00'];
+  let localTimezone = $state('Local time');
+  const reminderPresets = ['16:00', '17:00', '18:00'];
+
+  function normalizeReminderTime(value: string): string {
+    const match = value.trim().match(/^(\d{1,2}):(\d{1,2})$/);
+    if (!match) return '17:00';
+    const hh = Number(match[1]);
+    const mm = Number(match[2]);
+    if (Number.isNaN(hh) || Number.isNaN(mm)) return '17:00';
+    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return '17:00';
+    return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+  }
+
+  function formatReminderTime(value: string): string {
+    const normalized = normalizeReminderTime(value);
+    const [hh, mm] = normalized.split(':').map((part) => Number(part));
+    const date = new Date();
+    date.setHours(hh, mm, 0, 0);
+    return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date);
+  }
 
   onMount(async () => {
     try {
@@ -18,7 +37,8 @@
       const dr = await getSetting('daily_reminder');
       if (dr) dailyReminder = dr === 'true';
       const rt = await getSetting('reminder_time');
-      if (rt) reminderTime = rt;
+      if (rt) reminderTime = normalizeReminderTime(rt);
+      localTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local time';
     } catch {
       // Settings not yet set
     }
@@ -34,10 +54,10 @@
     await setSetting('daily_reminder', String(dailyReminder));
   }
 
-  async function cycleReminderTime() {
-    const idx = reminderTimes.indexOf(reminderTime);
-    reminderTime = reminderTimes[(idx + 1) % reminderTimes.length];
-    await setSetting('reminder_time', reminderTime);
+  async function setReminderTime(value: string) {
+    const normalized = normalizeReminderTime(value);
+    reminderTime = normalized;
+    await setSetting('reminder_time', normalized);
   }
 
   async function toggleLaunchAtLogin() {
@@ -125,11 +145,32 @@
     <div class="setting-item" class:disabled={!dailyReminder}>
       <div class="setting-info">
         <div class="setting-name">Reminder Time</div>
-        <div class="setting-desc">When to send the reminder notification</div>
+        <div class="setting-desc">When to send the reminder notification (local Mac time)</div>
       </div>
-      <button class="setting-val" onclick={cycleReminderTime} disabled={!dailyReminder}>
-        {reminderTime}
-      </button>
+      <div class="setting-time-group">
+        <input
+          class="setting-time"
+          type="time"
+          value={reminderTime}
+          step="60"
+          disabled={!dailyReminder}
+          aria-label="Daily reminder time"
+          onchange={(e) => setReminderTime((e.target as HTMLInputElement).value)}
+        />
+        <div class="setting-time-presets">
+          {#each reminderPresets as preset}
+            <button
+              class="setting-time-preset"
+              class:active={reminderTime === preset}
+              onclick={() => setReminderTime(preset)}
+              disabled={!dailyReminder}
+            >
+              {preset}
+            </button>
+          {/each}
+        </div>
+        <div class="setting-time-note">{formatReminderTime(reminderTime)} ({localTimezone})</div>
+      </div>
     </div>
 
     <div class="setting-item">
@@ -280,6 +321,67 @@
     background: rgba(61, 122, 237, 0.08);
     padding: 4px 10px;
     border-radius: 4px;
+  }
+
+  .setting-time {
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--accent-blue);
+    font-weight: 600;
+    flex-shrink: 0;
+    margin-left: 12px;
+    background: rgba(61, 122, 237, 0.08);
+    border: 1px solid rgba(61, 122, 237, 0.2);
+    padding: 4px 8px;
+    border-radius: 4px;
+    width: 92px;
+  }
+
+  .setting-time-group {
+    margin-left: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+
+  .setting-time:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+
+  .setting-time-presets {
+    display: flex;
+    gap: 4px;
+  }
+
+  .setting-time-preset {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 2px 7px;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .setting-time-preset.active {
+    color: var(--accent-blue);
+    border-color: rgba(61, 122, 237, 0.45);
+    background: rgba(61, 122, 237, 0.12);
+  }
+
+  .setting-time-preset:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .setting-time-note {
+    font-size: 10px;
+    color: var(--text-muted);
+    line-height: 1.3;
   }
 
   .toggle {
