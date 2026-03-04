@@ -1,13 +1,22 @@
 <script lang="ts">
-  import { setSearchQuery, search } from '$lib/stores/tasks.svelte';
+  import { getSearchQuery, setSearchQuery, search } from '$lib/stores/tasks.svelte';
+  import { onDestroy, onMount } from 'svelte';
 
   let input = $state('');
-  let debounceTimer: ReturnType<typeof setTimeout>;
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let inputEl: HTMLInputElement;
+
+  onMount(() => {
+    input = getSearchQuery();
+  });
+
+  onDestroy(() => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+  });
 
   function handleInput() {
     setSearchQuery(input);
-    clearTimeout(debounceTimer);
+    if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       if (input.trim()) search(input);
     }, 300);

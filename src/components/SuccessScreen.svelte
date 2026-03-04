@@ -124,7 +124,7 @@
       <button class="btn-jira">Retry Failed</button>
     {:else}
       <button class="btn-jira" onclick={handleOpenJira} disabled={openingJira}>
-        {openingJira ? 'Opening...' : 'Open Jira &#8599;'}
+        {openingJira ? 'Opening...' : 'Open Jira'}
       </button>
     {/if}
   </div>

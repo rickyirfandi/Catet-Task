@@ -2,7 +2,7 @@
   import { login, getLoading, getError } from '$lib/stores/auth.svelte';
   import appIcon from '../assets/app-icon.png';
 
-  let domain = $state('');
+  let domain = $state('lgq-team.atlassian.net');
   let email = $state('');
   let token = $state('');
 
@@ -43,7 +43,7 @@
       <input
         class="input-field"
         type="email"
-        placeholder="you@company.com"
+        placeholder="email@logique.co.id"
         bind:value={email}
       />
     </div>

@@ -8,7 +8,6 @@
   let dailyReminder = $state(false);
   let reminderTime = $state('17:00');
   let localTimezone = $state('Local time');
-  const reminderPresets = ['16:00', '17:00', '18:00'];
 
   function normalizeReminderTime(value: string): string {
     const match = value.trim().match(/^(\d{1,2}):(\d{1,2})$/);
@@ -161,28 +160,18 @@
         <div class="setting-desc">When to send the reminder notification (local Mac time)</div>
       </div>
       <div class="setting-time-group">
-        <input
-          class="setting-time"
-          type="time"
-          value={reminderTime}
-          step="60"
-          disabled={!dailyReminder}
-          aria-label="Daily reminder time"
-          onchange={(e) => setReminderTime((e.target as HTMLInputElement).value)}
-        />
-        <div class="setting-time-presets">
-          {#each reminderPresets as preset}
-            <button
-              class="setting-time-preset"
-              class:active={reminderTime === preset}
-              onclick={() => setReminderTime(preset)}
-              disabled={!dailyReminder}
-            >
-              {preset}
-            </button>
-          {/each}
+        <div class="setting-time-row">
+          <input
+            class="setting-time"
+            type="time"
+            value={reminderTime}
+            step="60"
+            disabled={!dailyReminder}
+            aria-label="Daily reminder time"
+            onchange={(e) => setReminderTime((e.target as HTMLInputElement).value)}
+          />
         </div>
-        <div class="setting-time-note">{formatReminderTime(reminderTime)} ({localTimezone})</div>
+        <div class="setting-time-note">Selected: {formatReminderTime(reminderTime)} ({localTimezone})</div>
       </div>
     </div>
 
@@ -205,7 +194,7 @@
   <button class="btn-danger" onclick={handleLogout}>Disconnect &amp; Logout</button>
   <button class="btn-quit" onclick={handleQuit}>Quit Catet Task</button>
 
-  <p class="byline">made with ❤️ by Ricky Irfandi</p>
+  <p class="byline">2026 - Ricky Irfandi</p>
 
   {#if showResetConfirm}
     <div
@@ -357,15 +346,15 @@
   .setting-time {
     font-size: 12px;
     font-family: var(--font-mono);
-    color: var(--accent-blue);
+    color: var(--text-primary);
     font-weight: 600;
     flex-shrink: 0;
-    margin-left: 12px;
-    background: rgba(61, 122, 237, 0.08);
-    border: 1px solid rgba(61, 122, 237, 0.2);
-    padding: 4px 8px;
-    border-radius: 4px;
-    width: 92px;
+    margin-left: 0;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    padding: 5px 8px;
+    border-radius: 7px;
+    width: 108px;
   }
 
   .setting-time-group {
@@ -373,39 +362,19 @@
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 2px;
+    gap: 4px;
     flex-shrink: 0;
+    min-width: 108px;
+  }
+
+  .setting-time-row {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
   }
 
   .setting-time:disabled {
     opacity: 0.65;
-    cursor: not-allowed;
-  }
-
-  .setting-time-presets {
-    display: flex;
-    gap: 4px;
-  }
-
-  .setting-time-preset {
-    font-size: 10px;
-    font-family: var(--font-mono);
-    color: var(--text-secondary);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 2px 7px;
-    background: transparent;
-    cursor: pointer;
-  }
-
-  .setting-time-preset.active {
-    color: var(--accent-blue);
-    border-color: rgba(61, 122, 237, 0.45);
-    background: rgba(61, 122, 237, 0.12);
-  }
-
-  .setting-time-preset:disabled {
-    opacity: 0.6;
     cursor: not-allowed;
   }
 
@@ -510,7 +479,7 @@
     text-align: center;
     font-size: 10px;
     color: var(--text-muted);
-    opacity: 0.45;
+    opacity: 1;
     margin: 4px 0 16px;
     font-family: var(--font-body);
     letter-spacing: 0.02em;
