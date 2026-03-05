@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="app-icon.png" alt="Catet Task" width="128" />
+  <img src="jtt logo new 2.png" alt="Catet Task" width="128" />
   <h1>Catet Task</h1>
   <p><strong>A lightweight, local-first Jira time tracker that lives in your menu bar.</strong></p>
   <p>
