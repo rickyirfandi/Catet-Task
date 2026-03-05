@@ -1,179 +1,198 @@
-# Catet Task
+<div align="center">
+  <img src="app-icon.png" alt="Catet Task" width="128" />
+  <h1>Catet Task</h1>
+  <p><strong>A lightweight, local-first Jira time tracker that lives in your menu bar.</strong></p>
+  <p>
+    <a href="#features">Features</a> &bull;
+    <a href="#download">Download</a> &bull;
+    <a href="#building-from-source">Build</a> &bull;
+    <a href="#contributing">Contributing</a> &bull;
+    <a href="#license">License</a>
+  </p>
+  <p>
+    <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-informational" />
+    <img alt="Built with Tauri" src="https://img.shields.io/badge/built%20with-Tauri%20v2-blue" />
+    <img alt="License" src="https://img.shields.io/badge/license-MIT-green" />
+  </p>
+</div>
 
-Lightweight Jira time tracker built with Tauri + Svelte.
+---
 
-`Catet Task` is a tray-first desktop app focused on macOS workflows: start/pause/resume task timers, review today or weekly totals, and push worklogs to Jira with local-first persistence.
+Catet Task is a tray-first desktop app for tracking time on Jira tasks. Start, pause, and resume timers from the system tray, review daily or weekly totals, and push worklogs to Jira — all with local-first persistence so your data is never lost.
 
-Version: `0.1.0`
+## Features
 
-## Highlights
-
-- Tray app with fast Timer / Today / Weekly / Settings tabs.
-- Jira API token login with auto-verify on app start.
-- One active timer model with pause/resume support.
-- Robust timer recovery for:
-  - laptop sleep / wake,
-  - force close / crash + reopen,
-  - long inactive gaps.
-- Local-timezone based grouping for Today and Weekly views.
-- Task detail view with richer metadata (type, priority, assignee, created/updated, description).
-- Daily reminder notifications with configurable time picker and presets (`16:00`, `17:00`, `18:00`).
-- Export options:
-  - copy report text to clipboard,
-  - download CSV.
+- **Tray-native** — lives in the menu bar / system tray with real-time elapsed time display
+- **One active timer** — start/pause/resume with automatic switching between tasks
+- **Robust timer recovery** — survives sleep, wake, force-quit, and crash with no lost time
+- **Partial log flow** — choose which entries to submit; running timers stay untouched
+- **Today & Weekly views** — daily summary and weekly breakdown with per-task percentages
+- **Task detail** — view issue type, priority, assignee, description, and session history
+- **Export** — copy report to clipboard or download as CSV
+- **Daily reminders** — configurable notification to remind you to log time
+- **Dark theme** — purpose-built dark UI, no light mode
+- **Offline-capable** — time tracking works fully offline; only fetch and submit need connectivity
 
 ## Tech Stack
 
-- Frontend: Svelte 5 + TypeScript + Vite
-- Desktop shell: Tauri v2 (Rust)
-- Local storage: SQLite (`sqlx`)
-- Notifications: `tauri-plugin-notification`
-- Launch at login: `tauri-plugin-autostart`
+| Layer | Technology |
+|---|---|
+| App shell | [Tauri v2](https://v2.tauri.app/) (Rust) |
+| Frontend | [Svelte 5](https://svelte.dev/) + TypeScript + Vite |
+| Local DB | SQLite via [sqlx](https://github.com/launchbadge/sqlx) |
+| Credentials | OS keychain via [keyring](https://crates.io/crates/keyring) |
+| HTTP | [reqwest](https://crates.io/crates/reqwest) (rustls) |
 
-## Requirements
+## Download
 
-- Node.js 20+
-- npm 10+
-- Rust stable toolchain
-- Tauri v2 prerequisites for your OS
+Pre-built binaries are available from [Releases](../../releases). Builds are produced via GitHub Actions on every tag push.
 
-macOS specific:
+| Platform | Artifact |
+|---|---|
+| macOS (Apple Silicon) | `.dmg` |
+| macOS (Intel) | `.dmg` |
+| Windows (x64) | `.msi` / `.exe` |
 
-- Xcode Command Line Tools installed
-- App notifications allowed in System Settings
+> **macOS note:** The app is signed and notarized. If Gatekeeper still warns you, right-click the app and choose "Open".
 
-## Quick Start
+## Building from Source
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) 20+
+- [Rust](https://rustup.rs/) stable toolchain
+- Tauri v2 system dependencies ([macOS](https://v2.tauri.app/start/prerequisites/#macos) | [Windows](https://v2.tauri.app/start/prerequisites/#windows) | [Linux](https://v2.tauri.app/start/prerequisites/#linux))
+
+### Steps
 
 ```bash
+# Clone the repo
+git clone https://github.com/nicvit/catet-task.git
+cd catet-task
+
+# Install frontend dependencies
 npm install
+
+# Run in development mode (hot-reload)
 npm run tauri dev
+
+# Build for production
+npm run tauri build
 ```
 
-Useful commands:
+### Useful Commands
 
 | Command | Purpose |
-| --- | --- |
-| `npm run dev` | Run frontend only (Vite) |
+|---|---|
+| `npm run dev` | Frontend only (Vite dev server) |
 | `npm run build` | Build frontend assets |
-| `npm run tauri dev` | Run full desktop app in dev mode |
-| `npm run tauri build` | Build production desktop app |
-| `cargo check` (in `src-tauri`) | Validate Rust compile |
+| `npm run tauri dev` | Full app in dev mode |
+| `npm run tauri build` | Production build |
+| `cd src-tauri && cargo check` | Validate Rust compilation |
+| `cd src-tauri && cargo clippy` | Lint Rust code |
+| `cd src-tauri && cargo fmt` | Format Rust code |
 
-## Build (macOS Example)
+## How It Works
 
-```bash
-npm run build
-npm run tauri build -- --target aarch64-apple-darwin
-```
+### Timer Engine
 
-## How Robust Timer Handling Works
+The timer runs entirely in Rust — not in the browser. A `tokio` interval ticks every second, updates the tray title, and emits events to the Svelte frontend. This means:
 
-The app uses layered protection so tracked time is not inflated by sleep/offline gaps and survives unexpected app closure.
+- Closing the panel window does **not** stop the timer
+- Timer state is persisted to SQLite so it survives app restarts
+- Sleep/wake cycles are detected and excluded from tracked time
+- A heartbeat mechanism estimates downtime after unexpected shutdowns
 
-1. Persisted timer session:
-- Active timer state is stored in settings (`timer_session_v1`) so it can be restored on relaunch.
+### Jira Integration
 
-2. Heartbeat:
-- While running, backend writes a UTC heartbeat (`timer_heartbeat_utc_v1`) every ~5s.
-- On restart, this heartbeat is used to estimate external downtime and exclude it.
+- **Auth:** API token stored in the OS keychain; Basic auth over HTTPS
+- **Tasks:** Fetched via JQL (`assignee = currentUser() AND status IN ("To Do", "In Progress") AND sprint IN openSprints()`)
+- **Worklogs:** POSTed to `/rest/api/3/issue/{key}/worklog` with Atlassian Document Format comments
+- **Error handling:** 401 triggers re-login, 429 retries with exponential backoff, 5xx retries up to 3 times
 
-3. Inactive-gap compensation:
-- Runtime tick logic detects long gaps (`>20s`) and shifts timer start to remove inactive duration.
+### Data Storage
 
-4. macOS power notifications:
-- On sleep: engine marks sleep start.
-- On wake: exact sleep duration is excluded from active timer.
+All data lives locally in a SQLite database at the Tauri app config directory:
 
-5. DB recovery:
-- Open/unclosed entries are reconciled during startup recovery to avoid duplicate active sessions.
+| OS | Path |
+|---|---|
+| macOS | `~/Library/Application Support/id.rickyirfandi.catettask/catet-task.db` |
+| Windows | `%APPDATA%/id.rickyirfandi.catettask/catet-task.db` |
+| Linux | `~/.local/share/id.rickyirfandi.catettask/catet-task.db` |
 
-## Timezone Behavior
-
-- Today view queries by local date (`date(start_time, 'localtime')`).
-- Weekly view uses local Monday-Sunday range.
-- Task detail segment times are rendered in local timezone.
-- Reminder time is interpreted and displayed in local Mac timezone.
-
-## Jira Auth and Security
-
-- Primary credential storage: OS keychain (`keyring`).
-- Fallback for unsigned dev builds: encrypted credential blob in local settings.
-- Jira API calls use Basic auth over HTTPS.
-
-## Data Persistence
-
-- Local database file: `catet-task.db` in Tauri app config directory.
-- App updates via new DMG typically keep data if app config directory is preserved.
-- "Reset Data" in Settings removes time entries but keeps task cache/settings where applicable.
-
-## Export Format
-
-Clipboard export produces a report-friendly plain text block:
-
-- report title
-- period
-- generation timestamp
-- total tracked time
-- per-task breakdown with percentage
-
-CSV export includes:
-
-- `Task ID`
-- `Summary`
-- `Duration`
+Entries are never hard-deleted — soft flags preserve history for reporting.
 
 ## Project Structure
 
-| Path | Description |
-| --- | --- |
-| `src/` | Svelte frontend |
-| `src/components/` | Main UI screens and shared components |
-| `src/lib/stores/` | Frontend state stores |
-| `src-tauri/src/commands/` | Tauri command handlers |
-| `src-tauri/src/timer/` | Timer engine and heartbeat logic |
-| `src-tauri/src/power.rs` | macOS sleep/wake integration |
-| `src-tauri/src/reminder/` | Daily reminder scheduler |
-| `src-tauri/migrations/` | SQLite schema migration |
+```
+catet-task/
+├── src/                        # Svelte 5 frontend
+│   ├── components/             # UI screens and shared components
+│   ├── lib/stores/             # Reactive state (auth, tasks, timer, entries)
+│   ├── lib/api/                # Type-safe Tauri invoke wrappers
+│   └── lib/utils/              # Formatting, rounding helpers
+│
+├── src-tauri/                  # Rust backend
+│   ├── src/commands/           # Tauri command handlers
+│   ├── src/jira/               # Jira API client and models
+│   ├── src/timer/              # Timer engine and heartbeat
+│   ├── src/db/                 # SQLite queries
+│   └── migrations/             # SQL schema migrations
+│
+└── .github/workflows/          # CI: macOS and Windows builds
+```
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `Cmd/Ctrl + Shift + T` | Toggle panel |
+| `Cmd/Ctrl + Shift + P` | Pause / Resume |
+| `Cmd/Ctrl + Shift + L` | Open log flow |
+| `Cmd/Ctrl + K` | Focus search (panel open) |
+| `Escape` | Close panel |
 
 ## Troubleshooting
 
 ### Reminder notification does not fire
 
-- Confirm `Daily Reminder` is enabled in Settings.
-- Confirm reminder time and timezone are correct.
-- Ensure macOS notification permission is granted for the app.
-- Keep the app running (tray) for scheduled checks.
+- Confirm **Daily Reminder** is enabled in Settings
+- Verify the reminder time and timezone are correct
+- Ensure notification permission is granted for the app
+- Keep the app running in the tray
 
 ### `vite build` fails with `spawn EPERM` / esbuild
 
-- Close editors or antivirus tools that may lock `node_modules`.
-- Remove and reinstall dependencies:
+This is usually caused by editors or antivirus tools locking files in `node_modules`:
 
 ```bash
 rm -rf node_modules package-lock.json
 npm install
+npm run build
 ```
 
-- On macOS, remove quarantine flags if needed:
+On macOS, you may also need to remove quarantine flags:
 
 ```bash
 xattr -dr com.apple.quarantine node_modules
 ```
 
-- Re-run:
-
-```bash
-npm run build
-```
-
 ## Contributing
 
-1. Create a feature branch.
-2. Run checks before PR:
-- `npm run build` (frontend)
-- `cargo check` (backend)
-3. Include reproduction steps for bug fixes involving timer/sleep/restart behavior.
+Contributions are welcome! Here's how to get started:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Make your changes
+4. Run checks:
+   - `npm run build` — frontend compiles
+   - `cd src-tauri && cargo clippy` — no warnings
+   - `cd src-tauri && cargo fmt --check` — formatting passes
+5. Commit with a descriptive message
+6. Open a pull request
+
+For bug fixes involving timer, sleep/wake, or restart recovery, please include reproduction steps.
 
 ## License
 
-No license file is currently included in this repository.
+[MIT](LICENSE) &copy; Ricky Irfandi
