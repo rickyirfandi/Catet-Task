@@ -4,6 +4,7 @@ import type { Task } from '$lib/types';
 let tasks = $state<Task[]>([]);
 let searchResults = $state<Task[]>([]);
 let searchQuery = $state('');
+let activeProjectFilter = $state<string | null>(null);
 let loading = $state(false);
 let error = $state('');
 
@@ -16,13 +17,30 @@ export function getPinnedTasks(): Task[] {
   return tasks.filter(t => t.pinned);
 }
 
+export function getActiveProjectFilter() { return activeProjectFilter; }
+
+export function setActiveProjectFilter(key: string | null) {
+  activeProjectFilter = key;
+}
+
+export function getProjectKeys(): string[] {
+  const keys = new Set(tasks.map(t => t.projectKey).filter(Boolean));
+  return [...keys].sort();
+}
+
 export function getFilteredTasks(): Task[] {
-  if (!searchQuery.trim()) return tasks;
-  const q = searchQuery.toLowerCase();
-  return tasks.filter(t =>
-    t.id.toLowerCase().includes(q) ||
-    t.summary.toLowerCase().includes(q)
-  );
+  let result = tasks;
+  if (activeProjectFilter) {
+    result = result.filter(t => t.projectKey === activeProjectFilter);
+  }
+  if (searchQuery.trim()) {
+    const q = searchQuery.toLowerCase();
+    result = result.filter(t =>
+      t.id.toLowerCase().includes(q) ||
+      t.summary.toLowerCase().includes(q)
+    );
+  }
+  return result;
 }
 
 export function getSearchResults(): Task[] {
