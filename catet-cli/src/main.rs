@@ -420,7 +420,9 @@ async fn run(cli: Cli, db_path: &PathBuf) -> Result<(), String> {
                 .map_err(|e| format!("Cannot determine own path: {}", e))?;
 
             let target_dir = target.unwrap_or_else(|| {
-                dirs::home_dir().unwrap_or_else(|| PathBuf::from("/usr/local")).join(".local").join("bin")
+                dirs::home_dir()
+                    .map(|h| h.join(".local").join("bin"))
+                    .unwrap_or_else(|| PathBuf::from("/usr/local/bin"))
             });
 
             std::fs::create_dir_all(&target_dir)

@@ -108,14 +108,16 @@ fn find_cli_binary() -> Option<std::path::PathBuf> {
         return Some(candidate);
     }
 
-    // macOS app bundle: Contents/MacOS/catet-cli
+    // macOS app bundle: the main binary is at Contents/MacOS/<AppName>,
+    // and catet-cli is bundled at Contents/MacOS/catet-cli (same dir, already checked above).
+    // Also check Contents/Resources/ for non-executable resources layout.
     #[cfg(target_os = "macos")]
     {
-        let bundle_bin = exe
-            .parent()? // MacOS/
-            .join("catet-cli");
-        if bundle_bin.exists() {
-            return Some(bundle_bin);
+        if let Some(contents_dir) = dir.parent() {
+            let resources_bin = contents_dir.join("Resources").join("catet-cli");
+            if resources_bin.exists() {
+                return Some(resources_bin);
+            }
         }
     }
 

@@ -12,7 +12,7 @@ pub async fn open_pool(path: &std::path::Path) -> Result<SqlitePool, String> {
 }
 
 pub async fn open_pool_rw(path: &std::path::Path) -> Result<SqlitePool, String> {
-    let url = format!("sqlite:{}?mode=rwc", path.display());
+    let url = format!("sqlite:{}?mode=rw", path.display());
     SqlitePool::connect(&url)
         .await
         .map_err(|e| format!("Cannot open database at {}: {}", path.display(), e))
