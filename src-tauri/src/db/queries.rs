@@ -1,25 +1,86 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
 
-/// Initialize the database: create tables if they don't exist.
+/// A numbered migration with its SQL content.
+struct Migration {
+    version: i64,
+    name: &'static str,
+    sql: &'static str,
+}
+
+/// All migrations in order. Add new entries at the bottom.
+/// Migration 1 (init) is handled separately since it creates the tables.
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 2,
+        name: "add_parent",
+        sql: include_str!("../../migrations/002_add_parent.sql"),
+    },
+];
+
+/// Initialize the database: create tables and run pending migrations.
+///
+/// Each migration runs inside a transaction — it either fully applies
+/// or fully rolls back. No partial state, no data corruption.
 pub async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-    // raw_sql supports multiple semicolon-separated statements (sqlx::query does NOT)
+    // Step 1: Bootstrap — create core tables + schema_versions table.
+    // Uses CREATE TABLE IF NOT EXISTS, so safe to re-run.
     sqlx::raw_sql(include_str!("../../migrations/001_init.sql"))
         .execute(pool)
         .await?;
 
-    // Migration 002: add parent_key and parent_summary to tasks
-    // ALTER TABLE errors if columns already exist, so we check first.
-    let has_parent_key: (i32,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM pragma_table_info('tasks') WHERE name = 'parent_key'"
+    // Step 2: For users upgrading from v0.1.0 (before schema_versions existed),
+    // backfill version 1 so we know init has been applied.
+    let v1_exists: (i32,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM schema_versions WHERE version = 1",
     )
     .fetch_one(pool)
     .await?;
 
-    if has_parent_key.0 == 0 {
-        sqlx::raw_sql(include_str!("../../migrations/002_add_parent.sql"))
-            .execute(pool)
-            .await?;
+    if v1_exists.0 == 0 {
+        sqlx::query(
+            "INSERT INTO schema_versions (version, name) VALUES (1, 'init')",
+        )
+        .execute(pool)
+        .await?;
+    }
+
+    // Step 3: Run each pending migration inside a transaction.
+    for migration in MIGRATIONS {
+        let applied: (i32,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM schema_versions WHERE version = ?1",
+        )
+        .bind(migration.version)
+        .fetch_one(pool)
+        .await?;
+
+        if applied.0 > 0 {
+            continue;
+        }
+
+        // Run migration + record version atomically in a transaction.
+        // If anything fails, the entire migration is rolled back.
+        let mut tx = pool.begin().await?;
+
+        // Split SQL by semicolons and execute each statement individually
+        // within the transaction (sqlx transactions don't support raw_sql).
+        for statement in migration.sql.split(';') {
+            let trimmed = statement.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            sqlx::query(trimmed).execute(&mut *tx).await?;
+        }
+
+        sqlx::query(
+            "INSERT INTO schema_versions (version, name) VALUES (?1, ?2)",
+        )
+        .bind(migration.version)
+        .bind(migration.name)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
     }
 
     Ok(())
