@@ -73,6 +73,9 @@
       <span class="task-key">{task.id}</span>
       <Badge variant={statusBadge} />
     </div>
+    {#if task.parentSummary}
+      <div class="parent-story">{task.parentKey} · {task.parentSummary}</div>
+    {/if}
     <div class="task-name">{task.summary}</div>
     <div class="task-bottom">
       <span class="task-project">{task.projectKey}{task.sprintName ? ` · ${task.sprintName}` : ''}{#if task.inCurrentSprint && !task.sprintName}<span class="sprint-tag">Sprint</span>{/if}</span>
@@ -126,6 +129,16 @@
 
   .task-key.muted {
     color: var(--text-muted);
+  }
+
+  .parent-story {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .task-name {

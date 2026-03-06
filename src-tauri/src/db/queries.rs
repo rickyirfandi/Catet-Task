@@ -7,6 +7,21 @@ pub async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     sqlx::raw_sql(include_str!("../../migrations/001_init.sql"))
         .execute(pool)
         .await?;
+
+    // Migration 002: add parent_key and parent_summary to tasks
+    // ALTER TABLE errors if columns already exist, so we check first.
+    let has_parent_key: (i32,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM pragma_table_info('tasks') WHERE name = 'parent_key'"
+    )
+    .fetch_one(pool)
+    .await?;
+
+    if has_parent_key.0 == 0 {
+        sqlx::raw_sql(include_str!("../../migrations/002_add_parent.sql"))
+            .execute(pool)
+            .await?;
+    }
+
     Ok(())
 }
 
@@ -54,6 +69,8 @@ pub struct TaskRow {
     pub sprint_name: Option<String>,
     pub pinned: bool,
     pub last_fetched: Option<String>,
+    pub parent_key: Option<String>,
+    pub parent_summary: Option<String>,
 }
 
 pub async fn upsert_task(
@@ -64,11 +81,13 @@ pub async fn upsert_task(
     project_name: &str,
     status: &str,
     sprint_name: Option<&str>,
+    parent_key: Option<&str>,
+    parent_summary: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "INSERT INTO tasks (id, summary, project_key, project_name, status, sprint_name, last_fetched)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))
-         ON CONFLICT(id) DO UPDATE SET summary=?2, project_key=?3, project_name=?4, status=?5, sprint_name=?6, last_fetched=datetime('now')"
+        "INSERT INTO tasks (id, summary, project_key, project_name, status, sprint_name, parent_key, parent_summary, last_fetched)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))
+         ON CONFLICT(id) DO UPDATE SET summary=?2, project_key=?3, project_name=?4, status=?5, sprint_name=?6, parent_key=?7, parent_summary=?8, last_fetched=datetime('now')"
     )
     .bind(id)
     .bind(summary)
@@ -76,6 +95,8 @@ pub async fn upsert_task(
     .bind(project_name)
     .bind(status)
     .bind(sprint_name)
+    .bind(parent_key)
+    .bind(parent_summary)
     .execute(pool)
     .await?;
     Ok(())
@@ -83,7 +104,7 @@ pub async fn upsert_task(
 
 pub async fn get_all_tasks(pool: &SqlitePool) -> Result<Vec<TaskRow>, sqlx::Error> {
     sqlx::query_as::<_, TaskRow>(
-        "SELECT id, summary, project_key, project_name, status, sprint_name, pinned, last_fetched FROM tasks ORDER BY pinned DESC, last_fetched DESC"
+        "SELECT id, summary, project_key, project_name, status, sprint_name, pinned, last_fetched, parent_key, parent_summary FROM tasks ORDER BY pinned DESC, last_fetched DESC"
     )
     .fetch_all(pool)
     .await
@@ -92,7 +113,7 @@ pub async fn get_all_tasks(pool: &SqlitePool) -> Result<Vec<TaskRow>, sqlx::Erro
 pub async fn search_tasks(pool: &SqlitePool, query: &str) -> Result<Vec<TaskRow>, sqlx::Error> {
     let like = format!("%{}%", query);
     sqlx::query_as::<_, TaskRow>(
-        "SELECT id, summary, project_key, project_name, status, sprint_name, pinned, last_fetched FROM tasks WHERE id LIKE ?1 OR summary LIKE ?1 ORDER BY pinned DESC"
+        "SELECT id, summary, project_key, project_name, status, sprint_name, pinned, last_fetched, parent_key, parent_summary FROM tasks WHERE id LIKE ?1 OR summary LIKE ?1 ORDER BY pinned DESC"
     )
     .bind(&like)
     .fetch_all(pool)

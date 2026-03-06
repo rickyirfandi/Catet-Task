@@ -19,6 +19,8 @@ fn row_to_app_task(row: &queries::TaskRow) -> AppTask {
         pinned: row.pinned,
         last_fetched: row.last_fetched.clone(),
         in_current_sprint: false,
+        parent_key: row.parent_key.clone(),
+        parent_summary: row.parent_summary.clone(),
     }
 }
 
@@ -41,10 +43,13 @@ pub async fn fetch_my_tasks(
         let project_key = issue.fields.project.as_ref().map(|p| p.key.as_str()).unwrap_or("");
         let project_name = issue.fields.project.as_ref().map(|p| p.name.as_str()).unwrap_or("");
         let status = issue.fields.status.as_ref().map(|s| s.name.as_str()).unwrap_or("");
+        let parent_key = issue.fields.parent.as_ref().map(|p| p.key.as_str());
+        let parent_summary = issue.fields.parent.as_ref().map(|p| p.fields.summary.as_str());
 
         let _ = queries::upsert_task(
             &pool, &issue.key, &issue.fields.summary,
             project_key, project_name, status, None,
+            parent_key, parent_summary,
         ).await;
     }
 
@@ -115,10 +120,13 @@ pub async fn search_task(
                 let project_key = issue.fields.project.as_ref().map(|p| p.key.as_str()).unwrap_or("");
                 let project_name = issue.fields.project.as_ref().map(|p| p.name.as_str()).unwrap_or("");
                 let status = issue.fields.status.as_ref().map(|s| s.name.as_str()).unwrap_or("");
+                let parent_key = issue.fields.parent.as_ref().map(|p| p.key.as_str());
+                let parent_summary = issue.fields.parent.as_ref().map(|p| p.fields.summary.as_str());
 
                 let _ = queries::upsert_task(
                     &pool, &issue.key, &issue.fields.summary,
                     project_key, project_name, status, None,
+                    parent_key, parent_summary,
                 ).await;
 
                 tasks.push(AppTask {
@@ -131,6 +139,8 @@ pub async fn search_task(
                     pinned: false,
                     last_fetched: None,
                     in_current_sprint: true,
+                    parent_key: parent_key.map(String::from),
+                    parent_summary: parent_summary.map(String::from),
                 });
             }
         }
@@ -143,10 +153,13 @@ pub async fn search_task(
                 let project_key = issue.fields.project.as_ref().map(|p| p.key.as_str()).unwrap_or("");
                 let project_name = issue.fields.project.as_ref().map(|p| p.name.as_str()).unwrap_or("");
                 let status = issue.fields.status.as_ref().map(|s| s.name.as_str()).unwrap_or("");
+                let parent_key = issue.fields.parent.as_ref().map(|p| p.key.as_str());
+                let parent_summary = issue.fields.parent.as_ref().map(|p| p.fields.summary.as_str());
 
                 let _ = queries::upsert_task(
                     &pool, &issue.key, &issue.fields.summary,
                     project_key, project_name, status, None,
+                    parent_key, parent_summary,
                 ).await;
 
                 tasks.push(AppTask {
@@ -159,6 +172,8 @@ pub async fn search_task(
                     pinned: false,
                     last_fetched: None,
                     in_current_sprint: false,
+                    parent_key: parent_key.map(String::from),
+                    parent_summary: parent_summary.map(String::from),
                 });
             }
         }

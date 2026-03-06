@@ -17,6 +17,8 @@ export interface Task {
   pinned: boolean;
   lastFetched: string | null;
   inCurrentSprint: boolean;
+  parentKey: string | null;
+  parentSummary: string | null;
 }
 
 export interface TaskDetailData {
