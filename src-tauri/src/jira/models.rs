@@ -125,6 +125,7 @@ pub struct AppTask {
     pub sprint_name: Option<String>,
     pub pinned: bool,
     pub last_fetched: Option<String>,
+    pub in_current_sprint: bool,
 }
 
 /// Frontend-facing task detail struct

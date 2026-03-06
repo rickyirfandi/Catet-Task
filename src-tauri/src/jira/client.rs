@@ -85,9 +85,13 @@ impl JiraClient {
     }
 
     pub async fn search_issues(&self, jql: &str) -> Result<JiraSearchResult, String> {
+        self.search_issues_limited(jql, 50).await
+    }
+
+    pub async fn search_issues_limited(&self, jql: &str, max_results: u32) -> Result<JiraSearchResult, String> {
         let body = json!({
             "jql": jql,
-            "maxResults": 50,
+            "maxResults": max_results,
             "fields": SEARCH_FIELDS.split(',').collect::<Vec<&str>>()
         });
 

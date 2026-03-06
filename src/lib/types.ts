@@ -16,6 +16,7 @@ export interface Task {
   sprintName: string | null;
   pinned: boolean;
   lastFetched: string | null;
+  inCurrentSprint: boolean;
 }
 
 export interface TaskDetailData {

@@ -2,6 +2,7 @@ import { fetchMyTasks, searchTask, pinTask as apiPinTask, unpinTask as apiUnpinT
 import type { Task } from '$lib/types';
 
 let tasks = $state<Task[]>([]);
+let searchResults = $state<Task[]>([]);
 let searchQuery = $state('');
 let loading = $state(false);
 let error = $state('');
@@ -24,8 +25,13 @@ export function getFilteredTasks(): Task[] {
   );
 }
 
+export function getSearchResults(): Task[] {
+  return searchResults;
+}
+
 export function setSearchQuery(q: string) {
   searchQuery = q;
+  if (!q.trim()) searchResults = [];
 }
 
 export async function refresh() {
@@ -44,16 +50,15 @@ export async function refresh() {
 
 export async function search(query: string) {
   searchQuery = query;
-  if (!query.trim()) return;
+  if (!query.trim()) {
+    searchResults = [];
+    return;
+  }
   try {
     const results = await searchTask(query);
-    // Merge results with existing tasks, avoiding duplicates
-    const existing = new Set(tasks.map(t => t.id));
-    for (const task of results) {
-      if (!existing.has(task.id)) {
-        tasks = [...tasks, task];
-      }
-    }
+    const myTaskIds = new Set(tasks.map(t => t.id));
+    // Results already in "my tasks" stay there; others go to searchResults
+    searchResults = results.filter(t => !myTaskIds.has(t.id));
   } catch (e) {
     console.error('Search failed:', e);
   }
