@@ -1,0 +1,1 @@
+/home/user/Catet-Task/catet-cli/target/debug/catet-cli: /home/user/Catet-Task/catet-cli/src/credentials.rs /home/user/Catet-Task/catet-cli/src/db.rs /home/user/Catet-Task/catet-cli/src/format.rs /home/user/Catet-Task/catet-cli/src/jira.rs /home/user/Catet-Task/catet-cli/src/main.rs /home/user/Catet-Task/catet-cli/src/mcp.rs /home/user/Catet-Task/catet-cli/src/models.rs

@@ -1,6 +1,7 @@
 use crate::commands::timer::TIMER_SESSION_KEY;
 use crate::db::queries;
 use crate::timer;
+use serde::Serialize;
 use sqlx::SqlitePool;
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager, State};
@@ -73,4 +74,246 @@ pub async fn set_launch_at_login(
     queries::set_setting(&pool, "launch_at_login", &enabled.to_string())
         .await
         .map_err(|e| format!("Failed to save setting: {}", e))
+}
+
+// ── CLI + Claude Desktop integration ─────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliStatus {
+    pub installed: bool,
+    pub install_path: Option<String>,
+    pub cli_binary_found: bool,
+    pub cli_binary_path: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeDesktopStatus {
+    pub claude_installed: bool,
+    pub connected: bool,
+    pub config_path: Option<String>,
+}
+
+/// Finds the bundled `catet-cli` binary.
+/// In dev builds it lives in the same `target/` directory as the main binary.
+/// In production it is placed next to the main app binary (same dir or inside the bundle).
+fn find_cli_binary() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+
+    // Same directory as the running app binary
+    let candidate = dir.join("catet-cli");
+    if candidate.exists() {
+        return Some(candidate);
+    }
+
+    // macOS app bundle: Contents/MacOS/catet-cli
+    #[cfg(target_os = "macos")]
+    {
+        let bundle_bin = exe
+            .parent()? // MacOS/
+            .join("catet-cli");
+        if bundle_bin.exists() {
+            return Some(bundle_bin);
+        }
+    }
+
+    None
+}
+
+/// Path where the symlink / copy of `catet-cli` is installed for PATH access.
+fn cli_install_path() -> std::path::PathBuf {
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| "/tmp".to_string());
+    let home_path = std::path::PathBuf::from(home);
+
+    #[cfg(windows)]
+    {
+        let local_app_data = std::env::var("LOCALAPPDATA")
+            .unwrap_or_else(|_| home_path.join("AppData").join("Local").to_string_lossy().to_string());
+        std::path::PathBuf::from(local_app_data)
+            .join("Programs")
+            .join("catet-cli")
+            .join("catet-cli.exe")
+    }
+    #[cfg(not(windows))]
+    {
+        home_path.join(".local").join("bin").join("catet-cli")
+    }
+}
+
+fn claude_desktop_config_path() -> Option<std::path::PathBuf> {
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .ok()
+        .map(std::path::PathBuf::from)?;
+
+    #[cfg(target_os = "macos")]
+    {
+        Some(home.join("Library").join("Application Support").join("Claude").join("claude_desktop_config.json"))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let config_dir = std::env::var("XDG_CONFIG_HOME")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|_| home.join(".config"));
+        Some(config_dir.join("Claude").join("claude_desktop_config.json"))
+    }
+}
+
+#[tauri::command]
+pub async fn get_cli_status() -> Result<CliStatus, String> {
+    let install_path = cli_install_path();
+    let installed = install_path.exists();
+    let cli_binary = find_cli_binary();
+
+    Ok(CliStatus {
+        installed,
+        install_path: if installed { Some(install_path.to_string_lossy().to_string()) } else { None },
+        cli_binary_found: cli_binary.is_some(),
+        cli_binary_path: cli_binary.map(|p| p.to_string_lossy().to_string()),
+    })
+}
+
+#[tauri::command]
+pub async fn install_cli() -> Result<String, String> {
+    let cli_binary = find_cli_binary()
+        .ok_or_else(|| "catet-cli binary not found next to the app. Build it first with: cd catet-cli && cargo build --release".to_string())?;
+
+    let install_path = cli_install_path();
+
+    // Create parent dir
+    if let Some(parent) = install_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Cannot create directory {}: {}", parent.display(), e))?;
+    }
+
+    // Remove existing
+    if install_path.exists() || install_path.symlink_metadata().is_ok() {
+        std::fs::remove_file(&install_path)
+            .map_err(|e| format!("Cannot remove existing install: {}", e))?;
+    }
+
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(&cli_binary, &install_path)
+            .map_err(|e| format!("Cannot create symlink: {}", e))?;
+    }
+    #[cfg(windows)]
+    {
+        std::fs::copy(&cli_binary, &install_path)
+            .map_err(|e| format!("Cannot copy binary: {}", e))?;
+    }
+
+    Ok(install_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn uninstall_cli() -> Result<(), String> {
+    let install_path = cli_install_path();
+    if install_path.exists() || install_path.symlink_metadata().is_ok() {
+        std::fs::remove_file(&install_path)
+            .map_err(|e| format!("Cannot remove {}: {}", install_path.display(), e))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_claude_desktop_status() -> Result<ClaudeDesktopStatus, String> {
+    let config_path = claude_desktop_config_path();
+
+    let claude_installed = config_path
+        .as_ref()
+        .and_then(|p| p.parent())
+        .map(|dir| dir.exists())
+        .unwrap_or(false);
+
+    let connected = config_path
+        .as_ref()
+        .filter(|p| p.exists())
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+        .and_then(|v| v.get("mcpServers").cloned())
+        .and_then(|s| s.get("catet-task").cloned())
+        .is_some();
+
+    Ok(ClaudeDesktopStatus {
+        claude_installed,
+        connected,
+        config_path: config_path.map(|p| p.to_string_lossy().to_string()),
+    })
+}
+
+#[tauri::command]
+pub async fn connect_claude_desktop() -> Result<String, String> {
+    let cli_binary = find_cli_binary()
+        .ok_or_else(|| "catet-cli binary not found. Install CLI tools first.".to_string())?;
+
+    let config_path = claude_desktop_config_path()
+        .ok_or("Cannot determine Claude Desktop config path. Is Claude Desktop installed?")?;
+
+    // Check if Claude Desktop directory exists
+    let config_dir = config_path.parent()
+        .ok_or("Invalid config path")?;
+    if !config_dir.exists() {
+        return Err("Claude Desktop not found. Download it at claude.ai/download".to_string());
+    }
+
+    // Read or create config
+    let mut config: serde_json::Map<String, serde_json::Value> = if config_path.exists() {
+        let raw = std::fs::read_to_string(&config_path)
+            .map_err(|e| format!("Cannot read config: {}", e))?;
+        serde_json::from_str(&raw).unwrap_or_default()
+    } else {
+        serde_json::Map::new()
+    };
+
+    // Upsert catet-task MCP server entry
+    let mcp_servers = config
+        .entry("mcpServers")
+        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()))
+        .as_object_mut()
+        .ok_or("mcpServers is not an object in Claude Desktop config")?;
+
+    mcp_servers.insert(
+        "catet-task".to_string(),
+        serde_json::json!({
+            "command": cli_binary.to_string_lossy(),
+            "args": ["serve-mcp"]
+        }),
+    );
+
+    let output = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Cannot serialize config: {}", e))?;
+    std::fs::write(&config_path, output)
+        .map_err(|e| format!("Cannot write config: {}", e))?;
+
+    Ok(config_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn disconnect_claude_desktop() -> Result<(), String> {
+    let config_path = claude_desktop_config_path()
+        .ok_or("Cannot determine Claude Desktop config path")?;
+
+    if !config_path.exists() {
+        return Ok(());
+    }
+
+    let raw = std::fs::read_to_string(&config_path)
+        .map_err(|e| format!("Cannot read config: {}", e))?;
+    let mut config: serde_json::Value = serde_json::from_str(&raw).unwrap_or_default();
+
+    if let Some(mcp) = config.get_mut("mcpServers").and_then(|v| v.as_object_mut()) {
+        mcp.remove("catet-task");
+    }
+
+    let output = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Cannot serialize config: {}", e))?;
+    std::fs::write(&config_path, output)
+        .map_err(|e| format!("Cannot write config: {}", e))?;
+
+    Ok(())
 }

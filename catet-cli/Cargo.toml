@@ -1,0 +1,25 @@
+[package]
+name = "catet-cli"
+version = "0.1.0"
+edition = "2021"
+description = "CLI companion for Catet Task — time tracking for Jira"
+
+[[bin]]
+name = "catet-cli"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+keyring = { version = "3" }
+aes-gcm = "0.10"
+sha2 = "0.10"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
+dirs = "5"
+colored = "2"
+indexmap = "2"
