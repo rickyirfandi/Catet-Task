@@ -148,7 +148,7 @@ pub fn print_today(entries: &[EntryRow], tasks: &HashMap<String, &TaskRow>) {
     }
 
     // Date header from first entry
-    let date_str = &entries[0].start_time[..10];
+    let date_str = entries[0].start_time.get(..10).unwrap_or(&entries[0].start_time);
     println!("{}", fmt_date_header(date_str).bold());
     println!();
 
@@ -266,7 +266,7 @@ pub fn print_week(entries: &[EntryRow]) {
     let mut grand_total: i64 = 0;
 
     for entry in entries {
-        let date = entry.start_time[..10].to_string();
+        let date = entry.start_time.get(..10).unwrap_or(&entry.start_time).to_string();
         *by_date.entry(date).or_insert(0) += entry.effective_secs();
         grand_total += entry.effective_secs();
     }
@@ -318,7 +318,7 @@ pub fn print_standup(yesterday: &[EntryRow], today: &[EntryRow], tasks: &HashMap
     };
 
     if !yesterday.is_empty() {
-        let date = &yesterday[0].start_time[..10];
+        let date = yesterday[0].start_time.get(..10).unwrap_or(&yesterday[0].start_time);
         println!("{}", format!("Yesterday ({}):", fmt_date_header(date)).bold());
         for line in fmt_day(yesterday) {
             println!("{}", line);
@@ -327,7 +327,7 @@ pub fn print_standup(yesterday: &[EntryRow], today: &[EntryRow], tasks: &HashMap
     }
 
     if !today.is_empty() {
-        let date = &today[0].start_time[..10];
+        let date = today[0].start_time.get(..10).unwrap_or(&today[0].start_time);
         println!("{}", format!("Today ({}):", fmt_date_header(date)).bold());
         for line in fmt_day(today) {
             println!("{}", line);

@@ -43,7 +43,9 @@ fn parse_duration_to_minutes(s: &str) -> Result<i64, String> {
             total += num.parse::<i64>().map_err(|_| "Invalid duration")?;
             num.clear();
         } else if ch == 's' || ch == 'S' {
-            total += num.parse::<i64>().map_err(|_| "Invalid duration")? / 60;
+            // Convert seconds to minutes, rounding up so we don't silently discard time
+            let secs = num.parse::<i64>().map_err(|_| "Invalid duration")?;
+            total += (secs + 59) / 60;
             num.clear();
         } else {
             return Err(format!("Unexpected character '{}' in duration", ch));
@@ -227,7 +229,7 @@ async fn run(cli: Cli, db_path: &PathBuf) -> Result<(), String> {
 
             if cli.json {
                 let mut by_date: indexmap::IndexMap<String, i64> = indexmap::IndexMap::new();
-                for e in &entries { *by_date.entry(e.start_time[..10].to_string()).or_insert(0) += e.effective_secs(); }
+                for e in &entries { *by_date.entry(e.start_time.get(..10).unwrap_or(&e.start_time).to_string()).or_insert(0) += e.effective_secs(); }
                 let days: Vec<_> = by_date.iter().map(|(d, s)| json!({"date": d, "total_secs": s, "duration": format::fmt_duration(*s)})).collect();
                 let total: i64 = by_date.values().sum();
                 println!("{}", serde_json::to_string_pretty(&json!({"days": days, "total_secs": total})).unwrap());
@@ -325,12 +327,12 @@ async fn run(cli: Cli, db_path: &PathBuf) -> Result<(), String> {
                     }
                 }
                 result
-            } else if all_unlogged || true {
+            } else if all_unlogged {
                 db::get_entries_today(&pool).await?.into_iter()
                     .filter(|e| !e.synced_to_jira && (include_running || e.end_time.is_some()))
                     .collect()
             } else {
-                vec![]
+                return Err("Specify --entry <id> or --all-unlogged. Use `catet-cli entries --unlogged` to see what's available.".to_string());
             };
 
             if entries.is_empty() {

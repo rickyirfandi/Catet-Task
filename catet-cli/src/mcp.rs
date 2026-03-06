@@ -171,7 +171,7 @@ async fn handle_tool(name: &str, args: &Value, db_path: &std::path::Path) -> Res
             // Group by date
             let mut by_date: indexmap::IndexMap<String, i64> = indexmap::IndexMap::new();
             for e in &entries {
-                let date = e.start_time[..10].to_string();
+                let date = e.start_time.get(..10).unwrap_or(&e.start_time).to_string();
                 *by_date.entry(date).or_insert(0) += e.effective_secs();
             }
             let days: Vec<Value> = by_date
@@ -299,8 +299,6 @@ async fn handle_tool(name: &str, args: &Value, db_path: &std::path::Path) -> Res
 
 pub async fn serve(db_path: std::path::PathBuf) {
     let stdin = io::stdin();
-    let stdout = io::stdout();
-    let _ = stdout.lock(); // keep locked for clean output
 
     for line in stdin.lock().lines() {
         let line = match line {
