@@ -57,6 +57,10 @@ export async function refresh() {
   error = '';
   try {
     tasks = await fetchMyTasks();
+    // Auto-reset project filter if filtered project no longer has tasks
+    if (activeProjectFilter && !tasks.some(t => t.projectKey === activeProjectFilter)) {
+      activeProjectFilter = null;
+    }
   } catch (e: any) {
     const msg = typeof e === 'string' ? e : e?.message || 'Failed to fetch tasks';
     error = msg;

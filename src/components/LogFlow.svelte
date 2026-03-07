@@ -43,16 +43,16 @@
   }
 
   function handleEditorSave() {
-    if (editingEntry) {
-      // Sync saved description back to comments map
+    const entry = editingEntry;
+    editingEntry = null;
+    if (entry) {
       refresh().then(() => {
-        const saved = getEntries().find(e => e.id === editingEntry!.id);
+        const saved = getEntries().find(e => e.id === entry.id);
         if (saved?.description) {
           comments = { ...comments, [saved.taskId]: saved.description };
         }
       });
     }
-    editingEntry = null;
   }
 
   onMount(() => {
