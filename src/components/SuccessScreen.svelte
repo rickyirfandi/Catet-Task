@@ -13,9 +13,18 @@
     tasks: SubmitTask[];
     results: WorklogProgress[];
     onclose: () => void;
+    onretry: (failedTaskIds: string[]) => void;
   }
 
-  let { tasks, results, onclose }: Props = $props();
+  let { tasks, results, onclose, onretry }: Props = $props();
+  let retrying = $state(false);
+
+  function handleRetry() {
+    if (retrying) return;
+    retrying = true;
+    const failedIds = failed.map(r => r.task_id);
+    onretry(failedIds);
+  }
 
   let logged = $derived(results.filter(r => r.status === 'done'));
   let failed = $derived(results.filter(r => r.status === 'error'));
@@ -121,7 +130,9 @@
   <div class="success-footer">
     <button class="btn-done" onclick={onclose}>Close</button>
     {#if hasErrors}
-      <button class="btn-jira">Retry Failed</button>
+      <button class="btn-jira" onclick={handleRetry} disabled={retrying}>
+        {retrying ? 'Retrying...' : 'Retry Failed'}
+      </button>
     {:else}
       <button class="btn-jira" onclick={handleOpenJira} disabled={openingJira}>
         {openingJira ? 'Opening...' : 'Open Jira'}

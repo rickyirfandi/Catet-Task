@@ -105,14 +105,9 @@
     selectedTaskIds = new Set(aggEntries.filter(e => !e.isRunning).map(e => e.taskId));
   }
 
-  async function handleSubmit() {
-    step = 'submitting';
-    submitResults = [];
-
-    const selected = aggEntries.filter(e => selectedTaskIds.has(e.taskId));
-    submittedTasks = selected.map(e => ({ taskId: e.taskId, totalSecs: getRoundedSecs(e) }));
-    const submissions = selected.map(e => {
-      // Find the earliest entry's start time for this task
+  function buildSubmissions(taskIds: Set<string>) {
+    const selected = aggEntries.filter(e => taskIds.has(e.taskId));
+    return selected.map(e => {
       const taskEntries = rawEntries.filter(r => r.taskId === e.taskId && !r.syncedToJira);
       const earliest = taskEntries.reduce((a, b) => a.startTime < b.startTime ? a : b, taskEntries[0]);
       return {
@@ -123,7 +118,9 @@
         comment: comments[e.taskId]?.trim() ?? '',
       };
     });
+  }
 
+  async function doSubmit(submissions: ReturnType<typeof buildSubmissions>) {
     const unlisten = await listen<WorklogProgress>('worklog-progress', (event) => {
       submitResults = [...submitResults, event.payload];
     });
@@ -137,6 +134,32 @@
     unlisten();
     step = 'result';
     refresh();
+  }
+
+  async function handleSubmit() {
+    // Block 0-duration entries
+    const selected = aggEntries.filter(e => selectedTaskIds.has(e.taskId));
+    const zeroDuration = selected.filter(e => getRoundedSecs(e) <= 0);
+    if (zeroDuration.length > 0) {
+      const keys = zeroDuration.map(e => e.taskId).join(', ');
+      console.error(`Cannot log entries with 0 duration: ${keys}`);
+      return;
+    }
+
+    step = 'submitting';
+    submitResults = [];
+    submittedTasks = selected.map(e => ({ taskId: e.taskId, totalSecs: getRoundedSecs(e) }));
+
+    await doSubmit(buildSubmissions(selectedTaskIds));
+  }
+
+  async function handleRetry(failedTaskIds: string[]) {
+    step = 'submitting';
+    // Keep previous successful results, clear failed ones for retry
+    submitResults = submitResults.filter(r => r.status !== 'error');
+
+    const retrySet = new Set(failedTaskIds);
+    await doSubmit(buildSubmissions(retrySet));
   }
 </script>
 
@@ -152,6 +175,7 @@
     tasks={submittedTasks}
     results={submitResults}
     onclose={onclose}
+    onretry={handleRetry}
   />
 {:else}
   <div class="logflow">

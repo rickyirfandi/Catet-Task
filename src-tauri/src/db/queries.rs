@@ -292,13 +292,38 @@ pub async fn update_entry(
     id: i64,
     adjusted_secs: Option<i64>,
     description: Option<&str>,
+    date: Option<&str>,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE time_entries SET adjusted_secs = ?2, description = ?3 WHERE id = ?1")
-        .bind(id)
-        .bind(adjusted_secs)
-        .bind(description)
-        .execute(pool)
-        .await?;
+    // When a date is provided, shift start_time (and end_time if present)
+    // to the new date while preserving the original time-of-day.
+    match date {
+        Some(new_date) => {
+            sqlx::query(
+                "UPDATE time_entries SET \
+                 adjusted_secs = ?2, \
+                 description = ?3, \
+                 start_time = ?4 || substr(start_time, 11), \
+                 end_time = CASE WHEN end_time IS NOT NULL THEN ?4 || substr(end_time, 11) ELSE NULL END \
+                 WHERE id = ?1",
+            )
+            .bind(id)
+            .bind(adjusted_secs)
+            .bind(description)
+            .bind(new_date)
+            .execute(pool)
+            .await?;
+        }
+        None => {
+            sqlx::query(
+                "UPDATE time_entries SET adjusted_secs = ?2, description = ?3 WHERE id = ?1",
+            )
+            .bind(id)
+            .bind(adjusted_secs)
+            .bind(description)
+            .execute(pool)
+            .await?;
+        }
+    }
     Ok(())
 }
 
