@@ -23,6 +23,12 @@
     }, 300);
   }
 
+  function handleClear() {
+    input = '';
+    setSearchQuery('');
+    inputEl?.focus();
+  }
+
   let projectKeys = $derived(getProjectKeys());
   let activeFilter = $derived(getActiveProjectFilter());
 
@@ -45,6 +51,9 @@
     type="text"
     placeholder="Search tasks or paste PROJ-123..."
   />
+  {#if input}
+    <button class="clear-btn" onclick={handleClear} aria-label="Clear search">&times;</button>
+  {/if}
 </div>
 
 {#if projectKeys.length > 1}
@@ -95,6 +104,22 @@
     background: none;
     border: none;
     font-size: 12px;
+    color: var(--text-primary);
+  }
+
+  .clear-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: color 0.15s;
+  }
+
+  .clear-btn:hover {
     color: var(--text-primary);
   }
 

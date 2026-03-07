@@ -208,8 +208,10 @@
 
   /* Logged state */
   .task.logged {
-    opacity: 0.4;
     padding: 8px 13px;
+    background: var(--bg-panel);
+    border-color: rgba(45, 212, 160, 0.15);
+    border-style: dashed;
   }
 
   .task.logged .task-top {
@@ -236,7 +238,7 @@
   .logged-dur {
     font-size: 11px;
     font-family: var(--font-mono);
-    color: var(--text-muted);
+    color: var(--accent-green);
     flex-shrink: 0;
   }
 </style>

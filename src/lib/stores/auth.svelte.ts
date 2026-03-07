@@ -8,6 +8,7 @@ let error = $state<string | null>(null);
 export function getUser() { return user; }
 export function getLoading() { return loading; }
 export function getError() { return error; }
+export function clearError() { error = null; }
 export function isLoggedIn() { return user !== null; }
 
 export function getInitials(): string {

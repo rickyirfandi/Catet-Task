@@ -8,6 +8,14 @@
   let dailyReminder = $state(false);
   let reminderTime = $state('17:00');
   let localTimezone = $state('Local time');
+  let saveFlash = $state<string | null>(null);
+  let saveFlashTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function showSaved(label: string = 'Saved') {
+    saveFlash = label;
+    if (saveFlashTimer) clearTimeout(saveFlashTimer);
+    saveFlashTimer = setTimeout(() => saveFlash = null, 1500);
+  }
 
   function normalizeReminderTime(value: string): string {
     const match = value.trim().match(/^(\d{1,2}):(\d{1,2})$/);
@@ -46,17 +54,20 @@
   async function setRoundDuration(val: number) {
     roundDuration = val;
     await setSetting('round_duration', String(val));
+    showSaved();
   }
 
   async function toggleDailyReminder() {
     dailyReminder = !dailyReminder;
     await setSetting('daily_reminder', String(dailyReminder));
+    showSaved();
   }
 
   async function setReminderTime(value: string) {
     const normalized = normalizeReminderTime(value);
     reminderTime = normalized;
     await setSetting('reminder_time', normalized);
+    showSaved();
   }
 
   async function toggleLaunchAtLogin() {
@@ -64,6 +75,7 @@
     launchAtLogin = newValue;
     try {
       await setLaunchAtLogin(newValue);
+      showSaved();
     } catch {
       launchAtLogin = !newValue;
     }
@@ -193,6 +205,10 @@
   <button class="btn-reset" onclick={() => showResetConfirm = true}>Reset Data</button>
   <button class="btn-danger" onclick={handleLogout}>Disconnect &amp; Logout</button>
   <button class="btn-quit" onclick={handleQuit}>Quit Catet Task</button>
+
+  {#if saveFlash}
+    <div class="save-toast">{saveFlash}</div>
+  {/if}
 
   <p class="byline">2026 - Ricky Irfandi</p>
 
@@ -556,5 +572,26 @@
 
   .confirm-reset:hover {
     opacity: 0.9;
+  }
+
+  .save-toast {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent-green);
+    color: #0d0f13;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    padding: 6px 16px;
+    border-radius: 4px;
+    z-index: 200;
+    animation: toastIn 0.2s ease-out;
+  }
+
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
   }
 </style>
