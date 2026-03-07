@@ -28,6 +28,8 @@ export interface TaskDetailData {
   status: string;
   projectKey: string;
   projectName: string;
+  parentKey: string | null;
+  parentSummary: string | null;
   issueType: string | null;
   priority: string | null;
   assignee: string | null;

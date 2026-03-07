@@ -48,8 +48,19 @@
     if (entry) {
       refresh().then(() => {
         const saved = getEntries().find(e => e.id === entry.id);
-        if (saved?.description) {
-          comments = { ...comments, [saved.taskId]: saved.description };
+        if (saved) {
+          const next = { ...comments };
+          const value = saved.description?.trim() ?? '';
+          if (value) {
+            next[saved.taskId] = saved.description ?? '';
+          } else {
+            delete next[saved.taskId];
+          }
+          comments = next;
+        } else {
+          const next = { ...comments };
+          delete next[entry.taskId];
+          comments = next;
         }
       });
     }
@@ -155,10 +166,9 @@
 
   async function handleRetry(failedTaskIds: string[]) {
     step = 'submitting';
-    // Keep previous successful results, clear failed ones for retry
-    submitResults = submitResults.filter(r => r.status !== 'error');
-
     const retrySet = new Set(failedTaskIds);
+    // Keep successful results from previous attempt and clear stale progress for retried tasks.
+    submitResults = submitResults.filter(r => !retrySet.has(r.task_id));
     await doSubmit(buildSubmissions(retrySet));
   }
 </script>

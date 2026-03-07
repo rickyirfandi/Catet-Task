@@ -6,6 +6,7 @@
   let input = $state('');
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let inputEl: HTMLInputElement;
+  let chipRowEl = $state<HTMLDivElement | null>(null);
 
   onMount(() => {
     input = getSearchQuery();
@@ -24,6 +25,10 @@
   }
 
   function handleClear() {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
+    }
     input = '';
     setSearchQuery('');
     inputEl?.focus();
@@ -34,6 +39,15 @@
 
   function handleChipClick(key: string | null) {
     setActiveProjectFilter(activeFilter === key ? null : key);
+  }
+
+  function handleChipWheel(event: WheelEvent) {
+    if (!chipRowEl) return;
+    if (chipRowEl.scrollWidth <= chipRowEl.clientWidth) return;
+    const delta = event.deltaX !== 0 ? event.deltaX : event.deltaY;
+    if (delta === 0) return;
+    chipRowEl.scrollLeft += delta;
+    event.preventDefault();
   }
 
   export function focus() {
@@ -57,7 +71,13 @@
 </div>
 
 {#if projectKeys.length > 1}
-  <div class="chip-row">
+  <div
+    class="chip-row"
+    bind:this={chipRowEl}
+    role="group"
+    aria-label="Project filters"
+    onwheel={handleChipWheel}
+  >
     <button
       class="chip"
       class:active={activeFilter === null}
@@ -128,6 +148,9 @@
     gap: 6px;
     padding: 0 14px 4px;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
     scrollbar-width: none;
   }
 
@@ -137,6 +160,7 @@
 
   .chip {
     display: flex;
+    flex: 0 0 auto;
     align-items: center;
     gap: 5px;
     padding: 3px 10px;

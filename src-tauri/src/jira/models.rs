@@ -153,6 +153,8 @@ pub struct AppTaskDetail {
     pub status: String,
     pub project_key: String,
     pub project_name: String,
+    pub parent_key: Option<String>,
+    pub parent_summary: Option<String>,
     pub issue_type: Option<String>,
     pub priority: Option<String>,
     pub assignee: Option<String>,

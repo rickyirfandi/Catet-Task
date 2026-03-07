@@ -7,7 +7,7 @@ use std::time::Duration;
 use super::models::*;
 
 const SEARCH_FIELDS: &str = "summary,status,project,parent";
-const DETAIL_FIELDS: &str = "summary,status,project,description,issuetype,priority,assignee,updated,created";
+const DETAIL_FIELDS: &str = "summary,status,project,parent,description,issuetype,priority,assignee,updated,created";
 
 #[derive(Debug, Clone)]
 pub struct JiraClient {

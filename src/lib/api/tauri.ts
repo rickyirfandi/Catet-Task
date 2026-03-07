@@ -21,8 +21,8 @@ export const getCurrentUser = () =>
 export const fetchMyTasks = () =>
   invoke<Task[]>('fetch_my_tasks');
 
-export const searchTask = (query: string) =>
-  invoke<Task[]>('search_task', { query });
+export const searchTask = (query: string, projectKey: string | null = null) =>
+  invoke<Task[]>('search_task', { query, projectKey });
 
 export const pinTask = (taskId: string) =>
   invoke<void>('pin_task', { taskId });

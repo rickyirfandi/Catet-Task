@@ -171,14 +171,37 @@ pub async fn get_all_tasks(pool: &SqlitePool) -> Result<Vec<TaskRow>, sqlx::Erro
     .await
 }
 
-pub async fn search_tasks(pool: &SqlitePool, query: &str) -> Result<Vec<TaskRow>, sqlx::Error> {
+pub async fn search_tasks(
+    pool: &SqlitePool,
+    query: &str,
+    project_key: Option<&str>,
+) -> Result<Vec<TaskRow>, sqlx::Error> {
     let like = format!("%{}%", query);
-    sqlx::query_as::<_, TaskRow>(
-        "SELECT id, summary, project_key, project_name, status, sprint_name, pinned, last_fetched, parent_key, parent_summary FROM tasks WHERE id LIKE ?1 OR summary LIKE ?1 ORDER BY pinned DESC"
-    )
-    .bind(&like)
-    .fetch_all(pool)
-    .await
+    match project_key {
+        Some(project) => {
+            sqlx::query_as::<_, TaskRow>(
+                "SELECT id, summary, project_key, project_name, status, sprint_name, pinned, last_fetched, parent_key, parent_summary
+                 FROM tasks
+                 WHERE (id LIKE ?1 OR summary LIKE ?1) AND project_key = ?2
+                 ORDER BY pinned DESC",
+            )
+            .bind(&like)
+            .bind(project)
+            .fetch_all(pool)
+            .await
+        }
+        None => {
+            sqlx::query_as::<_, TaskRow>(
+                "SELECT id, summary, project_key, project_name, status, sprint_name, pinned, last_fetched, parent_key, parent_summary
+                 FROM tasks
+                 WHERE id LIKE ?1 OR summary LIKE ?1
+                 ORDER BY pinned DESC",
+            )
+            .bind(&like)
+            .fetch_all(pool)
+            .await
+        }
+    }
 }
 
 pub async fn pin_task(pool: &SqlitePool, task_id: &str) -> Result<(), sqlx::Error> {

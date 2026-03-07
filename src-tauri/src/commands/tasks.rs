@@ -52,17 +52,24 @@ pub async fn fetch_my_tasks(
             parent_key, parent_summary,
         ).await;
     }
+    let my_issue_ids: std::collections::HashSet<String> =
+        result.issues.iter().map(|issue| issue.key.clone()).collect();
 
     let rows = queries::get_all_tasks(&pool)
         .await
         .map_err(|e| format!("DB error: {}", e))?;
 
-    Ok(rows.iter().map(row_to_app_task).collect())
+    Ok(rows
+        .iter()
+        .filter(|row| my_issue_ids.contains(&row.id))
+        .map(row_to_app_task)
+        .collect())
 }
 
 #[tauri::command]
 pub async fn search_task(
     query: String,
+    project_key: Option<String>,
     client_state: State<'_, Arc<Mutex<Option<JiraClient>>>>,
     pool: State<'_, SqlitePool>,
 ) -> Result<Vec<AppTask>, String> {
@@ -70,9 +77,12 @@ pub async fn search_task(
     if q.is_empty() {
         return Ok(vec![]);
     }
+    let project_filter = project_key
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty());
 
     // 1. Local DB search (instant)
-    let local_rows = queries::search_tasks(&pool, &q)
+    let local_rows = queries::search_tasks(&pool, &q, project_filter.as_deref())
         .await
         .unwrap_or_default();
 
@@ -94,15 +104,20 @@ pub async fn search_task(
     } else {
         format!(r#"text ~ "{}""#, sanitized)
     };
+    let scoped_clause = if let Some(project) = &project_filter {
+        format!(r#"project = "{}" AND {}"#, project.replace('"', ""), text_clause)
+    } else {
+        text_clause
+    };
 
     // Two concurrent queries: sprint-scoped (prioritized) and broad
     let jql_sprint = format!(
         r#"{} AND sprint in openSprints() ORDER BY updated DESC"#,
-        text_clause
+        scoped_clause
     );
     let jql_broad = format!(
         r#"{} ORDER BY updated DESC"#,
-        text_clause
+        scoped_clause
     );
 
     let (sprint_result, broad_result) = tokio::join!(
@@ -240,6 +255,8 @@ pub async fn get_task_detail(
     let issue_type = fields.issue_type.as_ref().map(|v| v.name.clone());
     let priority = fields.priority.as_ref().map(|v| v.name.clone());
     let assignee = fields.assignee.as_ref().map(|v| v.display_name.clone());
+    let parent_key = fields.parent.as_ref().map(|v| v.key.clone());
+    let parent_summary = fields.parent.as_ref().map(|v| v.fields.summary.clone());
     let description = fields
         .description
         .as_ref()
@@ -253,6 +270,8 @@ pub async fn get_task_detail(
         status,
         project_key,
         project_name,
+        parent_key,
+        parent_summary,
         issue_type,
         priority,
         assignee,

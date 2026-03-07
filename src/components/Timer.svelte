@@ -2,7 +2,7 @@
   import SearchBar from './SearchBar.svelte';
   import TaskCard from './TaskCard.svelte';
   import TaskDetail from './TaskDetail.svelte';
-  import { getFilteredTasks, getSearchResults, getSearchQuery, getLoading, getError, getPinnedTasks, refresh as refreshTasks } from '$lib/stores/tasks.svelte';
+  import { getFilteredTasks, getSearchResults, getSearchQuery, getLoading, getError, refresh as refreshTasks } from '$lib/stores/tasks.svelte';
   import { getTaskId, getStatus } from '$lib/stores/timer.svelte';
   import { getEntries, getLoggedEntries, getUnloggedEntries, getTaskTotalSecs } from '$lib/stores/entries.svelte';
   import { refresh as refreshEntries } from '$lib/stores/entries.svelte';
@@ -29,9 +29,9 @@
   // Set of task IDs that have been logged to Jira
   let loggedTaskIds = $derived(new Set(logged.map(e => e.taskId)));
 
-  // Pinned tasks surfaced at top (excluding active and logged)
-  let pinnedTaskIds = $derived(new Set(getPinnedTasks().map(t => t.id)));
-  let pinnedTasks = $derived(getPinnedTasks().filter(t => t.id !== activeTaskId && !loggedTaskIds.has(t.id)));
+  // Pinned tasks surfaced at top (excluding active and logged), scoped to current project filter.
+  let pinnedTasks = $derived(tasks.filter(t => t.pinned && t.id !== activeTaskId && !loggedTaskIds.has(t.id)));
+  let pinnedTaskIds = $derived(new Set(pinnedTasks.map(t => t.id)));
 
   // Set of task IDs that have unlogged time tracked (stopped entries with duration > 0)
   let unloggedTaskIds = $derived(new Set(
