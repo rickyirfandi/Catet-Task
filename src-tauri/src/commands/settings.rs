@@ -2,7 +2,9 @@ use crate::commands::timer::TIMER_SESSION_KEY;
 use crate::db::queries;
 use crate::timer;
 use serde::Serialize;
+use serde_json::{json, Map, Value};
 use sqlx::SqlitePool;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
@@ -76,7 +78,10 @@ pub async fn set_launch_at_login(
         .map_err(|e| format!("Failed to save setting: {}", e))
 }
 
-// ── CLI + Claude Desktop integration ─────────────────────────────────────────
+// CLI + Claude Desktop integration
+
+const MCP_SERVER_NAME: &str = "catet-task";
+const MCP_SERVER_COMMAND_ARG: &str = "serve-mcp";
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -95,28 +100,77 @@ pub struct ClaudeDesktopStatus {
     pub config_path: Option<String>,
 }
 
-/// Finds the bundled `catet-cli` binary.
-/// In dev builds it lives in the same `target/` directory as the main binary.
-/// In production it is placed next to the main app binary (same dir or inside the bundle).
-fn find_cli_binary() -> Option<std::path::PathBuf> {
-    let exe = std::env::current_exe().ok()?;
-    let dir = exe.parent()?;
-
-    // Same directory as the running app binary
-    let candidate = dir.join("catet-cli");
-    if candidate.exists() {
-        return Some(candidate);
+fn target_triple() -> &'static str {
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    {
+        return "aarch64-apple-darwin";
+    }
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    {
+        return "x86_64-apple-darwin";
+    }
+    #[cfg(all(windows, target_arch = "x86_64"))]
+    {
+        return "x86_64-pc-windows-msvc";
+    }
+    #[cfg(all(windows, target_arch = "aarch64"))]
+    {
+        return "aarch64-pc-windows-msvc";
+    }
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    {
+        return "x86_64-unknown-linux-gnu";
+    }
+    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+    {
+        return "aarch64-unknown-linux-gnu";
     }
 
-    // macOS app bundle: the main binary is at Contents/MacOS/<AppName>,
-    // and catet-cli is bundled at Contents/MacOS/catet-cli (same dir, already checked above).
-    // Also check Contents/Resources/ for non-executable resources layout.
+    #[allow(unreachable_code)]
+    "unknown-target"
+}
+
+fn candidate_binary_names(base: &str) -> Vec<String> {
+    let mut names = vec![base.to_string()];
+
+    #[cfg(windows)]
+    names.push(format!("{}.exe", base));
+
+    let sidecar_base = format!("{}-{}", base, target_triple());
+    names.push(sidecar_base.clone());
+
+    #[cfg(windows)]
+    names.push(format!("{}.exe", sidecar_base));
+
+    names
+}
+
+fn find_in_dir(dir: &Path, names: &[String]) -> Option<PathBuf> {
+    for name in names {
+        let candidate = dir.join(name);
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+/// Finds bundled `catet-cli` binaries (plain or Tauri sidecar naming).
+fn find_bundled_cli_binary() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    let names = candidate_binary_names("catet-cli");
+
+    if let Some(found) = find_in_dir(dir, &names) {
+        return Some(found);
+    }
+
     #[cfg(target_os = "macos")]
     {
         if let Some(contents_dir) = dir.parent() {
-            let resources_bin = contents_dir.join("Resources").join("catet-cli");
-            if resources_bin.exists() {
-                return Some(resources_bin);
+            let resources_dir = contents_dir.join("Resources");
+            if let Some(found) = find_in_dir(&resources_dir, &names) {
+                return Some(found);
             }
         }
     }
@@ -124,18 +178,34 @@ fn find_cli_binary() -> Option<std::path::PathBuf> {
     None
 }
 
+fn resolve_cli_binary() -> Option<PathBuf> {
+    find_bundled_cli_binary().or_else(|| {
+        let installed = cli_install_path();
+        if installed.exists() {
+            Some(installed)
+        } else {
+            None
+        }
+    })
+}
+
 /// Path where the symlink / copy of `catet-cli` is installed for PATH access.
-fn cli_install_path() -> std::path::PathBuf {
+fn cli_install_path() -> PathBuf {
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .unwrap_or_else(|_| "/tmp".to_string());
-    let home_path = std::path::PathBuf::from(home);
+    let home_path = PathBuf::from(home);
 
     #[cfg(windows)]
     {
-        let local_app_data = std::env::var("LOCALAPPDATA")
-            .unwrap_or_else(|_| home_path.join("AppData").join("Local").to_string_lossy().to_string());
-        std::path::PathBuf::from(local_app_data)
+        let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| {
+            home_path
+                .join("AppData")
+                .join("Local")
+                .to_string_lossy()
+                .to_string()
+        });
+        PathBuf::from(local_app_data)
             .join("Programs")
             .join("catet-cli")
             .join("catet-cli.exe")
@@ -146,34 +216,129 @@ fn cli_install_path() -> std::path::PathBuf {
     }
 }
 
-fn claude_desktop_config_path() -> Option<std::path::PathBuf> {
-    let home = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .ok()
-        .map(std::path::PathBuf::from)?;
-
+fn claude_desktop_config_path() -> Option<PathBuf> {
     #[cfg(target_os = "macos")]
     {
-        Some(home.join("Library").join("Application Support").join("Claude").join("claude_desktop_config.json"))
+        let home = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .ok()
+            .map(PathBuf::from)?;
+        return Some(
+            home.join("Library")
+                .join("Application Support")
+                .join("Claude")
+                .join("claude_desktop_config.json"),
+        );
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        let appdata = std::env::var("APPDATA")
+            .map(PathBuf::from)
+            .or_else(|_| {
+                std::env::var("USERPROFILE")
+                    .map(PathBuf::from)
+                    .map(|h| h.join("AppData").join("Roaming"))
+            })
+            .ok()?;
+        return Some(appdata.join("Claude").join("claude_desktop_config.json"));
+    }
+    #[cfg(all(not(target_os = "macos"), not(windows)))]
     {
         let config_dir = std::env::var("XDG_CONFIG_HOME")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|_| home.join(".config"));
-        Some(config_dir.join("Claude").join("claude_desktop_config.json"))
+            .map(PathBuf::from)
+            .or_else(|_| {
+                std::env::var("HOME")
+                    .map(PathBuf::from)
+                    .map(|h| h.join(".config"))
+            })
+            .ok()?;
+        return Some(config_dir.join("Claude").join("claude_desktop_config.json"));
     }
+
+    #[allow(unreachable_code)]
+    None
+}
+
+fn parse_config_object(raw: &str, path: &Path) -> Result<Map<String, Value>, String> {
+    let value: Value = serde_json::from_str(raw)
+        .map_err(|e| format!("Invalid JSON in {}: {}", path.display(), e))?;
+    value
+        .as_object()
+        .cloned()
+        .ok_or_else(|| format!("Claude config at {} must be a JSON object", path.display()))
+}
+
+fn load_claude_config(path: &Path) -> Result<Map<String, Value>, String> {
+    if !path.exists() {
+        return Ok(Map::new());
+    }
+
+    let raw = std::fs::read_to_string(path)
+        .map_err(|e| format!("Cannot read {}: {}", path.display(), e))?;
+    if raw.trim().is_empty() {
+        return Ok(Map::new());
+    }
+
+    parse_config_object(&raw, path)
+}
+
+fn write_claude_config(path: &Path, config: &Map<String, Value>) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Cannot create config dir {}: {}", parent.display(), e))?;
+    }
+    let output = serde_json::to_string_pretty(config)
+        .map_err(|e| format!("Cannot serialize config: {}", e))?;
+    std::fs::write(path, output).map_err(|e| format!("Cannot write {}: {}", path.display(), e))
+}
+
+fn entry_is_connected(server_entry: &Value) -> bool {
+    let Some(server) = server_entry.as_object() else {
+        return false;
+    };
+
+    let command = server
+        .get("command")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    if command.is_empty() {
+        return false;
+    }
+
+    let args_ok = server
+        .get("args")
+        .and_then(|v| v.as_array())
+        .map(|args| {
+            args.iter()
+                .filter_map(|a| a.as_str())
+                .any(|arg| arg == MCP_SERVER_COMMAND_ARG)
+        })
+        .unwrap_or(false);
+    if !args_ok {
+        return false;
+    }
+
+    let path_like = command.contains('/') || command.contains('\\');
+    if path_like {
+        return PathBuf::from(command).exists();
+    }
+
+    true
 }
 
 #[tauri::command]
 pub async fn get_cli_status() -> Result<CliStatus, String> {
     let install_path = cli_install_path();
     let installed = install_path.exists();
-    let cli_binary = find_cli_binary();
+    let cli_binary = resolve_cli_binary();
 
     Ok(CliStatus {
         installed,
-        install_path: if installed { Some(install_path.to_string_lossy().to_string()) } else { None },
+        install_path: if installed {
+            Some(install_path.to_string_lossy().to_string())
+        } else {
+            None
+        },
         cli_binary_found: cli_binary.is_some(),
         cli_binary_path: cli_binary.map(|p| p.to_string_lossy().to_string()),
     })
@@ -181,8 +346,10 @@ pub async fn get_cli_status() -> Result<CliStatus, String> {
 
 #[tauri::command]
 pub async fn install_cli() -> Result<String, String> {
-    let cli_binary = find_cli_binary()
-        .ok_or_else(|| "catet-cli binary not found next to the app. Build it first with: cd catet-cli && cargo build --release".to_string())?;
+    let cli_binary = find_bundled_cli_binary().ok_or_else(|| {
+        "Bundled catet-cli binary not found. Ensure sidecar packaging is configured and built."
+            .to_string()
+    })?;
 
     let install_path = cli_install_path();
 
@@ -235,10 +402,10 @@ pub async fn get_claude_desktop_status() -> Result<ClaudeDesktopStatus, String> 
     let connected = config_path
         .as_ref()
         .filter(|p| p.exists())
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+        .and_then(|p| load_claude_config(p).ok())
         .and_then(|v| v.get("mcpServers").cloned())
-        .and_then(|s| s.get("catet-task").cloned())
+        .and_then(|s| s.get(MCP_SERVER_NAME).cloned())
+        .filter(entry_is_connected)
         .is_some();
 
     Ok(ClaudeDesktopStatus {
@@ -250,72 +417,93 @@ pub async fn get_claude_desktop_status() -> Result<ClaudeDesktopStatus, String> 
 
 #[tauri::command]
 pub async fn connect_claude_desktop() -> Result<String, String> {
-    let cli_binary = find_cli_binary()
+    let cli_binary = resolve_cli_binary()
         .ok_or_else(|| "catet-cli binary not found. Install CLI tools first.".to_string())?;
 
     let config_path = claude_desktop_config_path()
         .ok_or("Cannot determine Claude Desktop config path. Is Claude Desktop installed?")?;
 
     // Check if Claude Desktop directory exists
-    let config_dir = config_path.parent()
-        .ok_or("Invalid config path")?;
+    let config_dir = config_path.parent().ok_or("Invalid config path")?;
     if !config_dir.exists() {
         return Err("Claude Desktop not found. Download it at claude.ai/download".to_string());
     }
 
-    // Read or create config
-    let mut config: serde_json::Map<String, serde_json::Value> = if config_path.exists() {
-        let raw = std::fs::read_to_string(&config_path)
-            .map_err(|e| format!("Cannot read config: {}", e))?;
-        serde_json::from_str(&raw).unwrap_or_default()
-    } else {
-        serde_json::Map::new()
-    };
+    let mut config = load_claude_config(&config_path)?;
 
     // Upsert catet-task MCP server entry
     let mcp_servers = config
         .entry("mcpServers")
-        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()))
+        .or_insert_with(|| Value::Object(Map::new()))
         .as_object_mut()
         .ok_or("mcpServers is not an object in Claude Desktop config")?;
 
     mcp_servers.insert(
-        "catet-task".to_string(),
-        serde_json::json!({
+        MCP_SERVER_NAME.to_string(),
+        json!({
             "command": cli_binary.to_string_lossy(),
-            "args": ["serve-mcp"]
+            "args": [MCP_SERVER_COMMAND_ARG]
         }),
     );
 
-    let output = serde_json::to_string_pretty(&config)
-        .map_err(|e| format!("Cannot serialize config: {}", e))?;
-    std::fs::write(&config_path, output)
-        .map_err(|e| format!("Cannot write config: {}", e))?;
+    write_claude_config(&config_path, &config)?;
 
     Ok(config_path.to_string_lossy().to_string())
 }
 
 #[tauri::command]
 pub async fn disconnect_claude_desktop() -> Result<(), String> {
-    let config_path = claude_desktop_config_path()
-        .ok_or("Cannot determine Claude Desktop config path")?;
+    let config_path =
+        claude_desktop_config_path().ok_or("Cannot determine Claude Desktop config path")?;
 
     if !config_path.exists() {
         return Ok(());
     }
 
-    let raw = std::fs::read_to_string(&config_path)
-        .map_err(|e| format!("Cannot read config: {}", e))?;
-    let mut config: serde_json::Value = serde_json::from_str(&raw).unwrap_or_default();
+    let mut config = load_claude_config(&config_path)?;
 
-    if let Some(mcp) = config.get_mut("mcpServers").and_then(|v| v.as_object_mut()) {
-        mcp.remove("catet-task");
+    if let Some(existing) = config.get_mut("mcpServers") {
+        let mcp = existing
+            .as_object_mut()
+            .ok_or("mcpServers is not an object in Claude Desktop config")?;
+        mcp.remove(MCP_SERVER_NAME);
     }
 
-    let output = serde_json::to_string_pretty(&config)
-        .map_err(|e| format!("Cannot serialize config: {}", e))?;
-    std::fs::write(&config_path, output)
-        .map_err(|e| format!("Cannot write config: {}", e))?;
+    write_claude_config(&config_path, &config)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_config_requires_object_root() {
+        let path = Path::new("claude_desktop_config.json");
+        let err = parse_config_object("[]", path).unwrap_err();
+        assert!(err.contains("must be a JSON object"));
+    }
+
+    #[test]
+    fn parse_config_rejects_invalid_json() {
+        let path = Path::new("claude_desktop_config.json");
+        let err = parse_config_object("{", path).unwrap_err();
+        assert!(err.contains("Invalid JSON"));
+    }
+
+    #[test]
+    fn connected_entry_requires_serve_mcp_arg() {
+        let valid_command_form = json!({
+            "command": "catet-cli",
+            "args": ["serve-mcp"]
+        });
+        let invalid_command_form = json!({
+            "command": "catet-cli",
+            "args": ["status"]
+        });
+
+        assert!(entry_is_connected(&valid_command_form));
+        assert!(!entry_is_connected(&invalid_command_form));
+    }
 }

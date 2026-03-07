@@ -36,10 +36,21 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: |
+            src-tauri
+            catet-cli
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Test catet-cli
+        run: cargo test --manifest-path catet-cli/Cargo.toml --target ${{ matrix.target }}
+
+      - name: Build catet-cli sidecar
+        run: |
+          cargo build --manifest-path catet-cli/Cargo.toml --release --target ${{ matrix.target }}
+          mkdir -p src-tauri/binaries
+          cp catet-cli/target/${{ matrix.target }}/release/catet-cli src-tauri/binaries/catet-cli-${{ matrix.target }}
 
       - name: Import Apple Certificate
         env:
