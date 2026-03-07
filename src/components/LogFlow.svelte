@@ -1,6 +1,7 @@
 <script lang="ts">
   import Checkbox from './shared/Checkbox.svelte';
   import Badge from './shared/Badge.svelte';
+  import EntryEditor from './EntryEditor.svelte';
   import SubmitProgress from './SubmitProgress.svelte';
   import SuccessScreen from './SuccessScreen.svelte';
   import { getEntries, getAggregatedEntries, refresh } from '$lib/stores/entries.svelte';
@@ -10,7 +11,7 @@
   import { roundToNearest } from '$lib/utils/rounding';
   import { submitBatchWorklog } from '$lib/api/tauri';
   import { listen } from '@tauri-apps/api/event';
-  import type { LogFlowStep, WorklogProgress } from '$lib/types';
+  import type { LogFlowStep, WorklogProgress, TimeEntry } from '$lib/types';
   import { onMount } from 'svelte';
 
   interface Props {
@@ -25,14 +26,33 @@
   let submittedTasks = $state<{ taskId: string; totalSecs: number }[]>([]);
   let selectedTaskIds = $state<Set<string>>(new Set());
   let comments = $state<Record<string, string>>({});
-  let expandedTaskId = $state<string | null>(null);
+  let editingEntry = $state<TimeEntry | null>(null);
 
-  function toggleExpand(taskId: string) {
-    expandedTaskId = expandedTaskId === taskId ? null : taskId;
+  function openEditor(taskId: string) {
+    // Find the latest unsynced entry for this task
+    const taskEntries = rawEntries
+      .filter(e => e.taskId === taskId && !e.syncedToJira && e.endTime !== null)
+      .sort((a, b) => b.startTime.localeCompare(a.startTime));
+    if (taskEntries.length === 0) return;
+    const entry = { ...taskEntries[0] };
+    // Pre-fill description from comments if user already typed one
+    if (comments[taskId]?.trim() && !entry.description) {
+      entry.description = comments[taskId];
+    }
+    editingEntry = entry;
   }
 
-  function setComment(taskId: string, value: string) {
-    comments = { ...comments, [taskId]: value };
+  function handleEditorSave() {
+    if (editingEntry) {
+      // Sync saved description back to comments map
+      refresh().then(() => {
+        const saved = getEntries().find(e => e.id === editingEntry!.id);
+        if (saved?.description) {
+          comments = { ...comments, [saved.taskId]: saved.description };
+        }
+      });
+    }
+    editingEntry = null;
   }
 
   onMount(() => {
@@ -120,7 +140,9 @@
   }
 </script>
 
-{#if step === 'submitting'}
+{#if editingEntry}
+  <EntryEditor entry={editingEntry} onback={() => editingEntry = null} onsave={handleEditorSave} />
+{:else if step === 'submitting'}
   <SubmitProgress
     tasks={submittedTasks}
     results={submitResults}
@@ -164,22 +186,18 @@
     <div class="review-list">
       {#each aggEntries as entry (entry.taskId)}
         {@const selected = selectedTaskIds.has(entry.taskId)}
-        {@const expanded = expandedTaskId === entry.taskId}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="r-item" class:selected class:deselected={!selected} class:expanded>
+        <div class="r-item" class:selected class:deselected={!selected}>
           <div class="item-cb-wrap" onclick={() => toggleTask(entry.taskId)}>
             <Checkbox checked={selected} />
           </div>
-          <div class="item-body" onclick={() => toggleExpand(entry.taskId)}>
+          <div class="item-body">
             <div class="r-top">
               <span class="task-key">{entry.taskId}</span>
-              <div class="r-top-right">
-                {#if isRounded(entry)}
-                  <Badge variant="rounded" />
-                {/if}
-                <button class="edit-btn" class:has-comment={!!comments[entry.taskId]?.trim()}>&#9998;</button>
-              </div>
+              {#if isRounded(entry)}
+                <Badge variant="rounded" />
+              {/if}
             </div>
             <div class="r-name">{taskName(entry.taskId)}</div>
             <div class="r-meta">
@@ -191,23 +209,13 @@
               </div>
               <span class="r-sessions">{entry.entryIds.length} session{entry.entryIds.length > 1 ? 's' : ''}</span>
             </div>
-            {#if comments[entry.taskId]?.trim() && !expanded}
+            {#if comments[entry.taskId]?.trim()}
               <div class="comment-preview">{comments[entry.taskId]}</div>
             {/if}
           </div>
-          {#if expanded}
-            <!-- svelte-ignore a11y_autofocus -->
-            <div class="comment-wrap" onclick={(e) => e.stopPropagation()}>
-              <textarea
-                class="comment-input"
-                placeholder="Add a worklog comment..."
-                rows="2"
-                autofocus
-                value={comments[entry.taskId] ?? ''}
-                oninput={(e) => setComment(entry.taskId, e.currentTarget.value)}
-              ></textarea>
-            </div>
-          {/if}
+          <button class="edit-btn" class:has-comment={!!comments[entry.taskId]?.trim()} onclick={(e) => { e.stopPropagation(); openEditor(entry.taskId); }}>
+            &#9998;
+          </button>
         </div>
       {/each}
     </div>
@@ -387,12 +395,6 @@
     margin-bottom: 3px;
   }
 
-  .r-top-right {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
   .task-key {
     font-size: 11px;
     font-weight: 600;
@@ -444,21 +446,31 @@
 
   /* ── Edit button & comment ── */
   .edit-btn {
-    font-size: 12px;
-    background: none;
-    border: none;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    align-self: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-panel);
     color: var(--text-muted);
+    font-size: 14px;
     cursor: pointer;
-    padding: 0 2px;
-    line-height: 1;
+    transition: all 0.15s;
+  }
+
+  .edit-btn:hover {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+    background: rgba(61, 122, 237, 0.08);
   }
 
   .edit-btn.has-comment {
     color: var(--accent-blue);
-  }
-
-  .r-item.expanded {
-    border-color: rgba(61, 122, 237, 0.4);
+    border-color: rgba(61, 122, 237, 0.3);
   }
 
   .comment-preview {
@@ -469,33 +481,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .comment-wrap {
-    width: 100%;
-    padding-left: 0;
-  }
-
-  .comment-input {
-    width: 100%;
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--text-primary);
-    font-size: 12px;
-    font-family: var(--font-body);
-    padding: 8px 10px;
-    resize: vertical;
-    min-height: 36px;
-    outline: none;
-  }
-
-  .comment-input:focus {
-    border-color: var(--accent-blue);
-  }
-
-  .comment-input::placeholder {
-    color: var(--text-muted);
   }
 
   /* ── Footer: single row ── */
