@@ -38,6 +38,12 @@ CREATE TABLE IF NOT EXISTS settings (
   value  TEXT
 );
 
+CREATE TABLE IF NOT EXISTS schema_versions (
+  version     INTEGER PRIMARY KEY,
+  name        TEXT NOT NULL,
+  applied_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_entries_task ON time_entries(task_id);
 CREATE INDEX IF NOT EXISTS idx_entries_date ON time_entries(start_time);
 CREATE INDEX IF NOT EXISTS idx_entries_synced ON time_entries(synced_to_jira);

@@ -1,10 +1,12 @@
 <script lang="ts">
-  import { getSearchQuery, setSearchQuery, search } from '$lib/stores/tasks.svelte';
+  import { getSearchQuery, setSearchQuery, search, getProjectKeys, getActiveProjectFilter, setActiveProjectFilter } from '$lib/stores/tasks.svelte';
+  import { getProjectColor } from '$lib/utils/projectColor';
   import { onDestroy, onMount } from 'svelte';
 
   let input = $state('');
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let inputEl: HTMLInputElement;
+  let chipRowEl = $state<HTMLDivElement | null>(null);
 
   onMount(() => {
     input = getSearchQuery();
@@ -22,6 +24,32 @@
     }, 300);
   }
 
+  function handleClear() {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
+    }
+    input = '';
+    setSearchQuery('');
+    inputEl?.focus();
+  }
+
+  let projectKeys = $derived(getProjectKeys());
+  let activeFilter = $derived(getActiveProjectFilter());
+
+  function handleChipClick(key: string | null) {
+    setActiveProjectFilter(activeFilter === key ? null : key);
+  }
+
+  function handleChipWheel(event: WheelEvent) {
+    if (!chipRowEl) return;
+    if (chipRowEl.scrollWidth <= chipRowEl.clientWidth) return;
+    const delta = event.deltaX !== 0 ? event.deltaX : event.deltaY;
+    if (delta === 0) return;
+    chipRowEl.scrollLeft += delta;
+    event.preventDefault();
+  }
+
   export function focus() {
     inputEl?.focus();
   }
@@ -37,7 +65,36 @@
     type="text"
     placeholder="Search tasks or paste PROJ-123..."
   />
+  {#if input}
+    <button class="clear-btn" onclick={handleClear} aria-label="Clear search">&times;</button>
+  {/if}
 </div>
+
+{#if projectKeys.length > 1}
+  <div
+    class="chip-row"
+    bind:this={chipRowEl}
+    role="group"
+    aria-label="Project filters"
+    onwheel={handleChipWheel}
+  >
+    <button
+      class="chip"
+      class:active={activeFilter === null}
+      onclick={() => handleChipClick(null)}
+    >All</button>
+    {#each projectKeys as key (key)}
+      <button
+        class="chip"
+        class:active={activeFilter === key}
+        onclick={() => handleChipClick(key)}
+      >
+        <span class="chip-dot" style:background={getProjectColor(key)}></span>
+        {key}
+      </button>
+    {/each}
+  </div>
+{/if}
 
 <style>
   .search-bar {
@@ -68,5 +125,73 @@
     border: none;
     font-size: 12px;
     color: var(--text-primary);
+  }
+
+  .clear-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: color 0.15s;
+  }
+
+  .clear-btn:hover {
+    color: var(--text-primary);
+  }
+
+  .chip-row {
+    display: flex;
+    gap: 6px;
+    padding: 0 14px 4px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    scrollbar-width: none;
+  }
+
+  .chip-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .chip {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+
+  .chip:hover {
+    border-color: var(--text-secondary);
+    color: var(--text-secondary);
+  }
+
+  .chip.active {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    color: #0d0f13;
+  }
+
+  .chip-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
   }
 </style>

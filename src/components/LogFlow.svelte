@@ -1,6 +1,7 @@
 <script lang="ts">
   import Checkbox from './shared/Checkbox.svelte';
   import Badge from './shared/Badge.svelte';
+  import EntryEditor from './EntryEditor.svelte';
   import SubmitProgress from './SubmitProgress.svelte';
   import SuccessScreen from './SuccessScreen.svelte';
   import { getEntries, getAggregatedEntries, refresh } from '$lib/stores/entries.svelte';
@@ -8,9 +9,10 @@
   import { getTasks } from '$lib/stores/tasks.svelte';
   import { formatDurationShort, formatDateHeader } from '$lib/utils/time';
   import { roundToNearest } from '$lib/utils/rounding';
+  import { decodeHtmlEntities } from '$lib/utils/text';
   import { submitBatchWorklog } from '$lib/api/tauri';
   import { listen } from '@tauri-apps/api/event';
-  import type { LogFlowStep, WorklogProgress } from '$lib/types';
+  import type { LogFlowStep, WorklogProgress, TimeEntry } from '$lib/types';
   import { onMount } from 'svelte';
 
   interface Props {
@@ -25,14 +27,44 @@
   let submittedTasks = $state<{ taskId: string; totalSecs: number }[]>([]);
   let selectedTaskIds = $state<Set<string>>(new Set());
   let comments = $state<Record<string, string>>({});
-  let expandedTaskId = $state<string | null>(null);
+  let editingEntry = $state<TimeEntry | null>(null);
 
-  function toggleExpand(taskId: string) {
-    expandedTaskId = expandedTaskId === taskId ? null : taskId;
+  function openEditor(taskId: string) {
+    // Find the latest unsynced entry for this task
+    const taskEntries = rawEntries
+      .filter(e => e.taskId === taskId && !e.syncedToJira && e.endTime !== null)
+      .sort((a, b) => b.startTime.localeCompare(a.startTime));
+    if (taskEntries.length === 0) return;
+    const entry = { ...taskEntries[0] };
+    // Pre-fill description from comments if user already typed one
+    if (comments[taskId]?.trim() && !entry.description) {
+      entry.description = comments[taskId];
+    }
+    editingEntry = entry;
   }
 
-  function setComment(taskId: string, value: string) {
-    comments = { ...comments, [taskId]: value };
+  function handleEditorSave() {
+    const entry = editingEntry;
+    editingEntry = null;
+    if (entry) {
+      refresh().then(() => {
+        const saved = getEntries().find(e => e.id === entry.id);
+        if (saved) {
+          const next = { ...comments };
+          const value = saved.description?.trim() ?? '';
+          if (value) {
+            next[saved.taskId] = decodeHtmlEntities(saved.description ?? '');
+          } else {
+            delete next[saved.taskId];
+          }
+          comments = next;
+        } else {
+          const next = { ...comments };
+          delete next[entry.taskId];
+          comments = next;
+        }
+      });
+    }
   }
 
   onMount(() => {
@@ -85,14 +117,9 @@
     selectedTaskIds = new Set(aggEntries.filter(e => !e.isRunning).map(e => e.taskId));
   }
 
-  async function handleSubmit() {
-    step = 'submitting';
-    submitResults = [];
-
-    const selected = aggEntries.filter(e => selectedTaskIds.has(e.taskId));
-    submittedTasks = selected.map(e => ({ taskId: e.taskId, totalSecs: getRoundedSecs(e) }));
-    const submissions = selected.map(e => {
-      // Find the earliest entry's start time for this task
+  function buildSubmissions(taskIds: Set<string>) {
+    const selected = aggEntries.filter(e => taskIds.has(e.taskId));
+    return selected.map(e => {
       const taskEntries = rawEntries.filter(r => r.taskId === e.taskId && !r.syncedToJira);
       const earliest = taskEntries.reduce((a, b) => a.startTime < b.startTime ? a : b, taskEntries[0]);
       return {
@@ -100,10 +127,12 @@
         taskId: e.taskId,
         timeSpentSeconds: getRoundedSecs(e),
         started: earliest?.startTime ?? e.latestStartTime,
-        comment: comments[e.taskId]?.trim() ?? '',
+        comment: decodeHtmlEntities(comments[e.taskId]?.trim() ?? ''),
       };
     });
+  }
 
+  async function doSubmit(submissions: ReturnType<typeof buildSubmissions>) {
     const unlisten = await listen<WorklogProgress>('worklog-progress', (event) => {
       submitResults = [...submitResults, event.payload];
     });
@@ -118,9 +147,36 @@
     step = 'result';
     refresh();
   }
+
+  async function handleSubmit() {
+    // Block 0-duration entries
+    const selected = aggEntries.filter(e => selectedTaskIds.has(e.taskId));
+    const zeroDuration = selected.filter(e => getRoundedSecs(e) <= 0);
+    if (zeroDuration.length > 0) {
+      const keys = zeroDuration.map(e => e.taskId).join(', ');
+      console.error(`Cannot log entries with 0 duration: ${keys}`);
+      return;
+    }
+
+    step = 'submitting';
+    submitResults = [];
+    submittedTasks = selected.map(e => ({ taskId: e.taskId, totalSecs: getRoundedSecs(e) }));
+
+    await doSubmit(buildSubmissions(selectedTaskIds));
+  }
+
+  async function handleRetry(failedTaskIds: string[]) {
+    step = 'submitting';
+    const retrySet = new Set(failedTaskIds);
+    // Keep successful results from previous attempt and clear stale progress for retried tasks.
+    submitResults = submitResults.filter(r => !retrySet.has(r.task_id));
+    await doSubmit(buildSubmissions(retrySet));
+  }
 </script>
 
-{#if step === 'submitting'}
+{#if editingEntry}
+  <EntryEditor entry={editingEntry} onback={() => editingEntry = null} onsave={handleEditorSave} />
+{:else if step === 'submitting'}
   <SubmitProgress
     tasks={submittedTasks}
     results={submitResults}
@@ -130,6 +186,7 @@
     tasks={submittedTasks}
     results={submitResults}
     onclose={onclose}
+    onretry={handleRetry}
   />
 {:else}
   <div class="logflow">
@@ -164,21 +221,28 @@
     <div class="review-list">
       {#each aggEntries as entry (entry.taskId)}
         {@const selected = selectedTaskIds.has(entry.taskId)}
-        {@const expanded = expandedTaskId === entry.taskId}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="r-item" class:selected class:deselected={!selected} class:expanded>
-          <div class="item-cb-wrap" onclick={() => toggleTask(entry.taskId)}>
+        <div class="r-item" class:selected class:deselected={!selected}>
+          <button
+            class="item-cb-wrap"
+            type="button"
+            onclick={() => toggleTask(entry.taskId)}
+            aria-label={selected ? `Uncheck ${entry.taskId}` : `Check ${entry.taskId}`}
+          >
             <Checkbox checked={selected} />
-          </div>
-          <div class="item-body" onclick={() => toggleExpand(entry.taskId)}>
+          </button>
+          <button
+            class="item-body"
+            type="button"
+            onclick={() => openEditor(entry.taskId)}
+            aria-label={`Edit ${entry.taskId}`}
+          >
             <div class="r-top">
               <span class="task-key">{entry.taskId}</span>
-              <div class="r-top-right">
+              <div class="r-actions">
                 {#if isRounded(entry)}
                   <Badge variant="rounded" />
                 {/if}
-                <button class="edit-btn" class:has-comment={!!comments[entry.taskId]?.trim()}>&#9998;</button>
+                <span class="edit-link" class:has-comment={!!comments[entry.taskId]?.trim()}>Edit</span>
               </div>
             </div>
             <div class="r-name">{taskName(entry.taskId)}</div>
@@ -191,23 +255,10 @@
               </div>
               <span class="r-sessions">{entry.entryIds.length} session{entry.entryIds.length > 1 ? 's' : ''}</span>
             </div>
-            {#if comments[entry.taskId]?.trim() && !expanded}
-              <div class="comment-preview">{comments[entry.taskId]}</div>
+            {#if comments[entry.taskId]?.trim()}
+              <div class="comment-preview">{decodeHtmlEntities(comments[entry.taskId])}</div>
             {/if}
-          </div>
-          {#if expanded}
-            <!-- svelte-ignore a11y_autofocus -->
-            <div class="comment-wrap" onclick={(e) => e.stopPropagation()}>
-              <textarea
-                class="comment-input"
-                placeholder="Add a worklog comment..."
-                rows="2"
-                autofocus
-                value={comments[entry.taskId] ?? ''}
-                oninput={(e) => setComment(entry.taskId, e.currentTarget.value)}
-              ></textarea>
-            </div>
-          {/if}
+          </button>
         </div>
       {/each}
     </div>
@@ -345,9 +396,7 @@
     border-radius: var(--radius-sm);
     padding: 10px 12px;
     display: flex;
-    flex-wrap: wrap;
     gap: 10px;
-    cursor: pointer;
     transition: all 0.15s;
     text-align: left;
     width: 100%;
@@ -371,13 +420,29 @@
   }
 
   .item-cb-wrap {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    cursor: pointer;
     flex-shrink: 0;
     margin-top: 1px;
   }
 
   .item-body {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
     flex: 1;
     min-width: 0;
+  }
+
+  .item-body:focus-visible {
+    outline: 1px solid rgba(61, 122, 237, 0.45);
+    border-radius: 4px;
   }
 
   .r-top {
@@ -387,16 +452,34 @@
     margin-bottom: 3px;
   }
 
-  .r-top-right {
+  .r-actions {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
   }
 
   .task-key {
     font-size: 11px;
     font-weight: 600;
     font-family: var(--font-mono);
+    color: var(--accent-blue);
+  }
+
+  .edit-link {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: color 0.15s;
+  }
+
+  .item-body:hover .edit-link,
+  .item-body:focus-visible .edit-link {
+    color: var(--accent-blue);
+  }
+
+  .edit-link.has-comment {
     color: var(--accent-blue);
   }
 
@@ -443,24 +526,6 @@
   }
 
   /* ── Edit button & comment ── */
-  .edit-btn {
-    font-size: 12px;
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 0 2px;
-    line-height: 1;
-  }
-
-  .edit-btn.has-comment {
-    color: var(--accent-blue);
-  }
-
-  .r-item.expanded {
-    border-color: rgba(61, 122, 237, 0.4);
-  }
-
   .comment-preview {
     font-size: 11px;
     color: var(--text-muted);
@@ -469,33 +534,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .comment-wrap {
-    width: 100%;
-    padding-left: 0;
-  }
-
-  .comment-input {
-    width: 100%;
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--text-primary);
-    font-size: 12px;
-    font-family: var(--font-body);
-    padding: 8px 10px;
-    resize: vertical;
-    min-height: 36px;
-    outline: none;
-  }
-
-  .comment-input:focus {
-    border-color: var(--accent-blue);
-  }
-
-  .comment-input::placeholder {
-    color: var(--text-muted);
   }
 
   /* ── Footer: single row ── */

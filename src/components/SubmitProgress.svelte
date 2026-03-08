@@ -15,9 +15,11 @@
   let { tasks, results }: Props = $props();
 
   function getStatus(taskId: string): WorklogProgress['status'] {
-    const r = results.find(r => r.task_id === taskId);
-    if (!r) return 'pending';
-    return r.status;
+    // Use the latest event for a task, not the first one.
+    for (let i = results.length - 1; i >= 0; i--) {
+      if (results[i].task_id === taskId) return results[i].status;
+    }
+    return 'pending';
   }
 
   function statusIcon(status: WorklogProgress['status']): string {

@@ -97,6 +97,12 @@
         <div class="detail-row"><span class="k">Created</span><span class="v">{detail.createdAt ? formatDateTime(detail.createdAt) : '-'}</span></div>
         <div class="detail-row"><span class="k">Updated</span><span class="v">{detail.updatedAt ? formatDateTime(detail.updatedAt) : '-'}</span></div>
       </div>
+      {#if detail.parentSummary}
+        <div class="parent-story">
+          <div class="k">Parent Story</div>
+          <div class="parent-text">{detail.parentKey} · {detail.parentSummary}</div>
+        </div>
+      {/if}
       {#if detail.description}
         <div class="desc">
           <div class="k">Description</div>
@@ -297,6 +303,23 @@
     margin-top: 8px;
     border-top: 1px solid var(--border);
     padding-top: 8px;
+  }
+
+  .parent-story {
+    margin-top: 8px;
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+  }
+
+  .parent-text {
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-family: var(--font-mono);
   }
 
   .desc-text {

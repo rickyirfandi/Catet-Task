@@ -73,9 +73,12 @@
       <span class="task-key">{task.id}</span>
       <Badge variant={statusBadge} />
     </div>
+    {#if task.parentSummary}
+      <div class="parent-story">{task.parentKey} · {task.parentSummary}</div>
+    {/if}
     <div class="task-name">{task.summary}</div>
     <div class="task-bottom">
-      <span class="task-project">{task.projectKey}{task.sprintName ? ` · ${task.sprintName}` : ''}</span>
+      <span class="task-project">{task.projectKey}{task.sprintName ? ` · ${task.sprintName}` : ''}{#if task.inCurrentSprint && !task.sprintName}<span class="sprint-tag">Sprint</span>{/if}</span>
       <div class="task-timer">
         <span class="task-time">{displayTime}</span>
         <button class="play-btn" class:on={isActive} onclick={handlePlay}>
@@ -128,6 +131,16 @@
     color: var(--text-muted);
   }
 
+  .parent-story {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .task-name {
     font-size: 13px;
     font-weight: 500;
@@ -145,6 +158,15 @@
     font-size: 10px;
     color: var(--text-muted);
     font-family: var(--font-mono);
+  }
+
+  .sprint-tag {
+    margin-left: 6px;
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--accent-purple);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
   }
 
   .task-timer {
@@ -186,8 +208,10 @@
 
   /* Logged state */
   .task.logged {
-    opacity: 0.4;
     padding: 8px 13px;
+    background: var(--bg-panel);
+    border-color: rgba(45, 212, 160, 0.15);
+    border-style: dashed;
   }
 
   .task.logged .task-top {
@@ -214,7 +238,7 @@
   .logged-dur {
     font-size: 11px;
     font-family: var(--font-mono);
-    color: var(--text-muted);
+    color: var(--accent-green);
     flex-shrink: 0;
   }
 </style>

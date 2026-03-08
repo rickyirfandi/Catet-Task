@@ -58,6 +58,8 @@ pub struct JiraIssueFields {
     pub updated: Option<String>,
     #[serde(default)]
     pub created: Option<String>,
+    #[serde(default)]
+    pub parent: Option<JiraParent>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,6 +87,17 @@ pub struct JiraPriority {
 pub struct JiraAssignee {
     #[serde(rename = "displayName")]
     pub display_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JiraParent {
+    pub key: String,
+    pub fields: JiraParentFields,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JiraParentFields {
+    pub summary: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -125,6 +138,9 @@ pub struct AppTask {
     pub sprint_name: Option<String>,
     pub pinned: bool,
     pub last_fetched: Option<String>,
+    pub in_current_sprint: bool,
+    pub parent_key: Option<String>,
+    pub parent_summary: Option<String>,
 }
 
 /// Frontend-facing task detail struct
@@ -137,6 +153,8 @@ pub struct AppTaskDetail {
     pub status: String,
     pub project_key: String,
     pub project_name: String,
+    pub parent_key: Option<String>,
+    pub parent_summary: Option<String>,
     pub issue_type: Option<String>,
     pub priority: Option<String>,
     pub assignee: Option<String>,

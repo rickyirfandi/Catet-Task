@@ -18,6 +18,9 @@ fn row_to_app_task(row: &queries::TaskRow) -> AppTask {
         sprint_name: row.sprint_name.clone(),
         pinned: row.pinned,
         last_fetched: row.last_fetched.clone(),
+        in_current_sprint: false,
+        parent_key: row.parent_key.clone(),
+        parent_summary: row.parent_summary.clone(),
     }
 }
 
@@ -40,62 +43,105 @@ pub async fn fetch_my_tasks(
         let project_key = issue.fields.project.as_ref().map(|p| p.key.as_str()).unwrap_or("");
         let project_name = issue.fields.project.as_ref().map(|p| p.name.as_str()).unwrap_or("");
         let status = issue.fields.status.as_ref().map(|s| s.name.as_str()).unwrap_or("");
+        let parent_key = issue.fields.parent.as_ref().map(|p| p.key.as_str());
+        let parent_summary = issue.fields.parent.as_ref().map(|p| p.fields.summary.as_str());
 
         let _ = queries::upsert_task(
             &pool, &issue.key, &issue.fields.summary,
             project_key, project_name, status, None,
+            parent_key, parent_summary,
         ).await;
     }
+    let my_issue_ids: std::collections::HashSet<String> =
+        result.issues.iter().map(|issue| issue.key.clone()).collect();
 
     let rows = queries::get_all_tasks(&pool)
         .await
         .map_err(|e| format!("DB error: {}", e))?;
 
-    Ok(rows.iter().map(row_to_app_task).collect())
+    Ok(rows
+        .iter()
+        .filter(|row| my_issue_ids.contains(&row.id))
+        .map(row_to_app_task)
+        .collect())
 }
 
 #[tauri::command]
 pub async fn search_task(
     query: String,
+    project_key: Option<String>,
     client_state: State<'_, Arc<Mutex<Option<JiraClient>>>>,
     pool: State<'_, SqlitePool>,
 ) -> Result<Vec<AppTask>, String> {
-    // First try local DB
-    let rows = queries::search_tasks(&pool, &query)
-        .await
-        .map_err(|e| format!("Search failed: {}", e))?;
-
-    if !rows.is_empty() {
-        return Ok(rows.iter().map(row_to_app_task).collect());
+    let q = query.trim().to_string();
+    if q.is_empty() {
+        return Ok(vec![]);
     }
+    let project_filter = project_key
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty());
 
-    // If local is empty and query looks like a Jira key (e.g. "ABC-123") or text, search via API
+    // 1. Local DB search (instant)
+    let local_rows = queries::search_tasks(&pool, &q, project_filter.as_deref())
+        .await
+        .unwrap_or_default();
+
+    // 2. Remote Jira search (if logged in)
     let client = {
         let state = client_state.lock().unwrap();
-        match state.clone() {
-            Some(c) => c,
-            None => return Ok(vec![]),
-        }
+        state.clone()
     };
 
-    let jql = if query.contains('-') && query.chars().any(|c| c.is_ascii_digit()) {
-        // Looks like a Jira key
-        format!(r#"key = "{}" ORDER BY updated DESC"#, query.replace('"', ""))
+    let Some(client) = client else {
+        return Ok(local_rows.iter().map(row_to_app_task).collect());
+    };
+
+    let sanitized = q.replace('"', "");
+    let is_key_like = sanitized.contains('-') && sanitized.chars().any(|c| c.is_ascii_digit());
+
+    let text_clause = if is_key_like {
+        format!(r#"key = "{}""#, sanitized)
     } else {
-        format!(r#"text ~ "{}" ORDER BY updated DESC"#, query.replace('"', ""))
+        format!(r#"text ~ "{}""#, sanitized)
+    };
+    let scoped_clause = if let Some(project) = &project_filter {
+        format!(r#"project = "{}" AND {}"#, project.replace('"', ""), text_clause)
+    } else {
+        text_clause
     };
 
-    match client.search_issues(&jql).await {
-        Ok(result) => {
-            let mut tasks = Vec::new();
-            for issue in &result.issues {
+    // Two concurrent queries: sprint-scoped (prioritized) and broad
+    let jql_sprint = format!(
+        r#"{} AND sprint in openSprints() ORDER BY updated DESC"#,
+        scoped_clause
+    );
+    let jql_broad = format!(
+        r#"{} ORDER BY updated DESC"#,
+        scoped_clause
+    );
+
+    let (sprint_result, broad_result) = tokio::join!(
+        client.search_issues_limited(&jql_sprint, 20),
+        client.search_issues_limited(&jql_broad, 15),
+    );
+
+    let mut seen = std::collections::HashSet::new();
+    let mut tasks = Vec::new();
+
+    // Sprint results first (tagged as in_current_sprint)
+    if let Ok(result) = sprint_result {
+        for issue in &result.issues {
+            if seen.insert(issue.key.clone()) {
                 let project_key = issue.fields.project.as_ref().map(|p| p.key.as_str()).unwrap_or("");
                 let project_name = issue.fields.project.as_ref().map(|p| p.name.as_str()).unwrap_or("");
                 let status = issue.fields.status.as_ref().map(|s| s.name.as_str()).unwrap_or("");
+                let parent_key = issue.fields.parent.as_ref().map(|p| p.key.as_str());
+                let parent_summary = issue.fields.parent.as_ref().map(|p| p.fields.summary.as_str());
 
                 let _ = queries::upsert_task(
                     &pool, &issue.key, &issue.fields.summary,
                     project_key, project_name, status, None,
+                    parent_key, parent_summary,
                 ).await;
 
                 tasks.push(AppTask {
@@ -107,12 +153,55 @@ pub async fn search_task(
                     sprint_name: None,
                     pinned: false,
                     last_fetched: None,
+                    in_current_sprint: true,
+                    parent_key: parent_key.map(String::from),
+                    parent_summary: parent_summary.map(String::from),
                 });
             }
-            Ok(tasks)
         }
-        Err(_) => Ok(vec![]),
     }
+
+    // Broad results (non-sprint or fallback)
+    if let Ok(result) = broad_result {
+        for issue in &result.issues {
+            if seen.insert(issue.key.clone()) {
+                let project_key = issue.fields.project.as_ref().map(|p| p.key.as_str()).unwrap_or("");
+                let project_name = issue.fields.project.as_ref().map(|p| p.name.as_str()).unwrap_or("");
+                let status = issue.fields.status.as_ref().map(|s| s.name.as_str()).unwrap_or("");
+                let parent_key = issue.fields.parent.as_ref().map(|p| p.key.as_str());
+                let parent_summary = issue.fields.parent.as_ref().map(|p| p.fields.summary.as_str());
+
+                let _ = queries::upsert_task(
+                    &pool, &issue.key, &issue.fields.summary,
+                    project_key, project_name, status, None,
+                    parent_key, parent_summary,
+                ).await;
+
+                tasks.push(AppTask {
+                    id: issue.key.clone(),
+                    summary: issue.fields.summary.clone(),
+                    project_key: project_key.to_string(),
+                    project_name: project_name.to_string(),
+                    status: status.to_string(),
+                    sprint_name: None,
+                    pinned: false,
+                    last_fetched: None,
+                    in_current_sprint: false,
+                    parent_key: parent_key.map(String::from),
+                    parent_summary: parent_summary.map(String::from),
+                });
+            }
+        }
+    }
+
+    // Merge local DB matches not already in remote results
+    for row in &local_rows {
+        if seen.insert(row.id.clone()) {
+            tasks.push(row_to_app_task(row));
+        }
+    }
+
+    Ok(tasks)
 }
 
 #[tauri::command]
@@ -166,6 +255,8 @@ pub async fn get_task_detail(
     let issue_type = fields.issue_type.as_ref().map(|v| v.name.clone());
     let priority = fields.priority.as_ref().map(|v| v.name.clone());
     let assignee = fields.assignee.as_ref().map(|v| v.display_name.clone());
+    let parent_key = fields.parent.as_ref().map(|v| v.key.clone());
+    let parent_summary = fields.parent.as_ref().map(|v| v.fields.summary.clone());
     let description = fields
         .description
         .as_ref()
@@ -179,6 +270,8 @@ pub async fn get_task_detail(
         status,
         project_key,
         project_name,
+        parent_key,
+        parent_summary,
         issue_type,
         priority,
         assignee,

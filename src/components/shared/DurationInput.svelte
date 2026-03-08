@@ -2,27 +2,41 @@
   interface Props {
     totalSecs: number;
     onchange: (secs: number) => void;
+    showAdjust?: boolean;
+    showQuick?: boolean;
   }
 
-  let { totalSecs, onchange }: Props = $props();
+  let { totalSecs, onchange, showAdjust = true, showQuick = true }: Props = $props();
 
-  let hours = $derived(Math.floor(totalSecs / 3600));
-  let minutes = $derived(Math.floor((totalSecs % 3600) / 60));
+  let hours = $derived(Math.floor(Math.max(0, totalSecs) / 3600));
+  let minutes = $derived(Math.floor((Math.max(0, totalSecs) % 3600) / 60));
+  let hoursInput = $state('0');
+  let minutesInput = $state('00');
+
+  $effect(() => {
+    hoursInput = String(hours);
+    minutesInput = String(minutes).padStart(2, '0');
+  });
+
+  function parseWholeNumber(raw: string): number {
+    const digits = raw.replace(/[^\d]/g, '');
+    if (!digits) return 0;
+    const parsed = Number.parseInt(digits, 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
 
   function update(h: number, m: number) {
-    const clamped = Math.max(0, h * 3600 + m * 60);
-    onchange(clamped);
+    const totalMinutes = Math.max(0, h * 60 + m);
+    onchange(totalMinutes * 60);
+  }
+
+  function commitFromInputs() {
+    update(parseWholeNumber(hoursInput), parseWholeNumber(minutesInput));
   }
 
   function adjustMinutes(delta: number) {
-    let newMin = minutes + delta;
-    let newHr = hours;
-    if (newMin >= 60) { newMin -= 60; newHr++; }
-    if (newMin < 0) {
-      if (newHr > 0) { newMin += 60; newHr--; }
-      else { newMin = 0; }
-    }
-    update(newHr, newMin);
+    const nextMinutes = Math.max(0, Math.floor(totalSecs / 60) + delta);
+    onchange(nextMinutes * 60);
   }
 
   const quickDurations = [
@@ -37,27 +51,47 @@
 
 <div class="dur-editor">
   <div class="dur-col">
-    <input class="dur-seg-input" type="number" min="0" max="23" value={String(hours).padStart(2, '0')}
-      onchange={(e) => update(parseInt((e.target as HTMLInputElement).value) || 0, minutes)} />
+    <input
+      class="dur-seg-input"
+      type="text"
+      inputmode="numeric"
+      pattern="[0-9]*"
+      bind:value={hoursInput}
+      oninput={(e) => hoursInput = (e.target as HTMLInputElement).value.replace(/[^\d]/g, '')}
+      onblur={commitFromInputs}
+      onkeydown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+    />
     <span class="dur-unit">hrs</span>
   </div>
   <span class="dur-sep">:</span>
   <div class="dur-col">
-    <input class="dur-seg-input" type="number" min="0" max="59" value={String(minutes).padStart(2, '0')}
-      onchange={(e) => update(hours, parseInt((e.target as HTMLInputElement).value) || 0)} />
+    <input
+      class="dur-seg-input"
+      type="text"
+      inputmode="numeric"
+      pattern="[0-9]*"
+      bind:value={minutesInput}
+      oninput={(e) => minutesInput = (e.target as HTMLInputElement).value.replace(/[^\d]/g, '')}
+      onblur={commitFromInputs}
+      onkeydown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+    />
     <span class="dur-unit">min</span>
   </div>
-  <div class="dur-adj">
-    <button class="adj-btn" onclick={() => adjustMinutes(15)}>&#9650;</button>
-    <button class="adj-btn" onclick={() => adjustMinutes(-15)}>&#9660;</button>
-  </div>
+  {#if showAdjust}
+    <div class="dur-adj">
+      <button class="adj-btn" onclick={() => adjustMinutes(15)}>&#9650;</button>
+      <button class="adj-btn" onclick={() => adjustMinutes(-15)}>&#9660;</button>
+    </div>
+  {/if}
 </div>
 
-<div class="quick-durs">
-  {#each quickDurations as qd}
-    <button class="qd" class:active={totalSecs === qd.secs} onclick={() => onchange(qd.secs)}>{qd.label}</button>
-  {/each}
-</div>
+{#if showQuick}
+  <div class="quick-durs">
+    {#each quickDurations as qd}
+      <button class="qd" class:active={totalSecs === qd.secs} onclick={() => onchange(qd.secs)}>{qd.label}</button>
+    {/each}
+  </div>
+{/if}
 
 <style>
   .dur-editor {
