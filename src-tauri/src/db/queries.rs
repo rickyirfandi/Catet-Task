@@ -316,7 +316,31 @@ pub async fn update_entry(
     adjusted_secs: Option<i64>,
     description: Option<&str>,
     date: Option<&str>,
+    started_at: Option<&str>,
 ) -> Result<(), sqlx::Error> {
+    // started_at takes precedence and shifts end_time by the same delta
+    // to preserve the original segment duration.
+    if let Some(new_started_at) = started_at {
+        sqlx::query(
+            "UPDATE time_entries SET \
+             adjusted_secs = ?2, \
+             description = ?3, \
+             start_time = ?4, \
+             end_time = CASE \
+               WHEN end_time IS NOT NULL THEN datetime(end_time, printf('%+f seconds', (julianday(?4) - julianday(start_time)) * 86400.0)) \
+               ELSE NULL \
+             END \
+             WHERE id = ?1",
+        )
+        .bind(id)
+        .bind(adjusted_secs)
+        .bind(description)
+        .bind(new_started_at)
+        .execute(pool)
+        .await?;
+        return Ok(());
+    }
+
     // When a date is provided, shift start_time (and end_time if present)
     // to the new date while preserving the original time-of-day.
     match date {

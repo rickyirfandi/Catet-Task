@@ -9,6 +9,7 @@
   import { getTasks } from '$lib/stores/tasks.svelte';
   import { formatDurationShort, formatDateHeader } from '$lib/utils/time';
   import { roundToNearest } from '$lib/utils/rounding';
+  import { decodeHtmlEntities } from '$lib/utils/text';
   import { submitBatchWorklog } from '$lib/api/tauri';
   import { listen } from '@tauri-apps/api/event';
   import type { LogFlowStep, WorklogProgress, TimeEntry } from '$lib/types';
@@ -52,7 +53,7 @@
           const next = { ...comments };
           const value = saved.description?.trim() ?? '';
           if (value) {
-            next[saved.taskId] = saved.description ?? '';
+            next[saved.taskId] = decodeHtmlEntities(saved.description ?? '');
           } else {
             delete next[saved.taskId];
           }
@@ -126,7 +127,7 @@
         taskId: e.taskId,
         timeSpentSeconds: getRoundedSecs(e),
         started: earliest?.startTime ?? e.latestStartTime,
-        comment: comments[e.taskId]?.trim() ?? '',
+        comment: decodeHtmlEntities(comments[e.taskId]?.trim() ?? ''),
       };
     });
   }
@@ -220,18 +221,29 @@
     <div class="review-list">
       {#each aggEntries as entry (entry.taskId)}
         {@const selected = selectedTaskIds.has(entry.taskId)}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div class="r-item" class:selected class:deselected={!selected}>
-          <div class="item-cb-wrap" onclick={() => toggleTask(entry.taskId)}>
+          <button
+            class="item-cb-wrap"
+            type="button"
+            onclick={() => toggleTask(entry.taskId)}
+            aria-label={selected ? `Uncheck ${entry.taskId}` : `Check ${entry.taskId}`}
+          >
             <Checkbox checked={selected} />
-          </div>
-          <div class="item-body">
+          </button>
+          <button
+            class="item-body"
+            type="button"
+            onclick={() => openEditor(entry.taskId)}
+            aria-label={`Edit ${entry.taskId}`}
+          >
             <div class="r-top">
               <span class="task-key">{entry.taskId}</span>
-              {#if isRounded(entry)}
-                <Badge variant="rounded" />
-              {/if}
+              <div class="r-actions">
+                {#if isRounded(entry)}
+                  <Badge variant="rounded" />
+                {/if}
+                <span class="edit-link" class:has-comment={!!comments[entry.taskId]?.trim()}>Edit</span>
+              </div>
             </div>
             <div class="r-name">{taskName(entry.taskId)}</div>
             <div class="r-meta">
@@ -244,11 +256,8 @@
               <span class="r-sessions">{entry.entryIds.length} session{entry.entryIds.length > 1 ? 's' : ''}</span>
             </div>
             {#if comments[entry.taskId]?.trim()}
-              <div class="comment-preview">{comments[entry.taskId]}</div>
+              <div class="comment-preview">{decodeHtmlEntities(comments[entry.taskId])}</div>
             {/if}
-          </div>
-          <button class="edit-btn" class:has-comment={!!comments[entry.taskId]?.trim()} onclick={(e) => { e.stopPropagation(); openEditor(entry.taskId); }}>
-            &#9998;
           </button>
         </div>
       {/each}
@@ -387,9 +396,7 @@
     border-radius: var(--radius-sm);
     padding: 10px 12px;
     display: flex;
-    flex-wrap: wrap;
     gap: 10px;
-    cursor: pointer;
     transition: all 0.15s;
     text-align: left;
     width: 100%;
@@ -413,13 +420,29 @@
   }
 
   .item-cb-wrap {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    cursor: pointer;
     flex-shrink: 0;
     margin-top: 1px;
   }
 
   .item-body {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
     flex: 1;
     min-width: 0;
+  }
+
+  .item-body:focus-visible {
+    outline: 1px solid rgba(61, 122, 237, 0.45);
+    border-radius: 4px;
   }
 
   .r-top {
@@ -429,10 +452,34 @@
     margin-bottom: 3px;
   }
 
+  .r-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
   .task-key {
     font-size: 11px;
     font-weight: 600;
     font-family: var(--font-mono);
+    color: var(--accent-blue);
+  }
+
+  .edit-link {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: color 0.15s;
+  }
+
+  .item-body:hover .edit-link,
+  .item-body:focus-visible .edit-link {
+    color: var(--accent-blue);
+  }
+
+  .edit-link.has-comment {
     color: var(--accent-blue);
   }
 
@@ -479,34 +526,6 @@
   }
 
   /* ── Edit button & comment ── */
-  .edit-btn {
-    width: 36px;
-    height: 36px;
-    flex-shrink: 0;
-    align-self: center;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-    background: var(--bg-panel);
-    color: var(--text-muted);
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .edit-btn:hover {
-    border-color: var(--accent-blue);
-    color: var(--accent-blue);
-    background: rgba(61, 122, 237, 0.08);
-  }
-
-  .edit-btn.has-comment {
-    color: var(--accent-blue);
-    border-color: rgba(61, 122, 237, 0.3);
-  }
-
   .comment-preview {
     font-size: 11px;
     color: var(--text-muted);

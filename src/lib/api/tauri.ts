@@ -56,8 +56,14 @@ export const getEntriesToday = () =>
 export const getEntriesRange = (startDate: string, endDate: string) =>
   invoke<TimeEntry[]>('get_entries_range', { startDate, endDate });
 
-export const updateEntry = (entryId: number, adjustedSecs: number | null, description: string | null, date: string | null) =>
-  invoke<void>('update_entry', { entryId, adjustedSecs, description, date });
+export const updateEntry = (
+  entryId: number,
+  adjustedSecs: number | null,
+  description: string | null,
+  date: string | null,
+  startedAt: string | null = null,
+) =>
+  invoke<void>('update_entry', { entryId, adjustedSecs, description, date, startedAt });
 
 // ── Worklog ──
 export const submitBatchWorklog = (entries: { entryIds: number[]; taskId: string; timeSpentSeconds: number; started: string; comment: string }[]) =>
