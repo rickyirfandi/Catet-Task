@@ -2,12 +2,12 @@
   import DurationInput from './shared/DurationInput.svelte';
   import CommentField from './shared/CommentField.svelte';
   import { getTasks } from '$lib/stores/tasks.svelte';
+  import { getEntries } from '$lib/stores/entries.svelte';
   import { updateEntry } from '$lib/api/tauri';
+  import { decodeHtmlEntities } from '$lib/utils/text';
   import {
-    formatTime,
+    parseAppDate,
     formatDurationShort,
-    getTodayLocalDateKey,
-    toLocalDateKeyFromValue,
   } from '$lib/utils/time';
   import type { TimeEntry } from '$lib/types';
 
@@ -19,20 +19,71 @@
 
   let { entry, onback, onsave }: Props = $props();
 
-  let adjustedSecs = $state(entry.adjustedSecs ?? entry.durationSecs ?? 0);
-  let description = $state(entry.description ?? '');
-  let date = $state(toLocalDateKeyFromValue(entry.startTime) ?? getTodayLocalDateKey());
+  let adjustedSecs = $state(0);
+  let description = $state('');
+  let startedTime = $state('00:00');
+  let saveError = $state('');
 
   let task = $derived(getTasks().find(t => t.id === entry.taskId));
   let rawSecs = $derived(entry.durationSecs ?? 0);
-  let isToday = $derived(date === getTodayLocalDateKey());
+  let canEditStarted = $derived.by(() => {
+    const taskEntries = getEntries().filter((e) =>
+      e.taskId === entry.taskId && !e.syncedToJira && e.endTime !== null
+    );
+    if (taskEntries.length === 0) return true;
+    const earliest = taskEntries.reduce((a, b) => {
+      if (b.startTime < a.startTime) return b;
+      if (b.startTime === a.startTime && b.id < a.id) return b;
+      return a;
+    });
+    return earliest.id === entry.id;
+  });
+
+  function toLocalTimeInput(value: string): string {
+    const parsed = parseAppDate(value);
+    if (!parsed) return '00:00';
+    const hh = String(parsed.getHours()).padStart(2, '0');
+    const mm = String(parsed.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  }
+
+  function toSqliteUtcWithLocalTime(baseValue: string, hhmm: string): string | null {
+    const base = parseAppDate(baseValue);
+    if (!base) return null;
+    const match = hhmm.trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+    if (!match) return null;
+    const h = Number.parseInt(match[1], 10);
+    const m = Number.parseInt(match[2], 10);
+    const local = new Date(base);
+    local.setHours(h, m, 0, 0);
+    const iso = local.toISOString(); // UTC
+    return iso.slice(0, 19).replace('T', ' ');
+  }
+
+  $effect(() => {
+    adjustedSecs = entry.adjustedSecs ?? entry.durationSecs ?? 0;
+    description = decodeHtmlEntities(entry.description ?? '');
+    startedTime = toLocalTimeInput(entry.startTime);
+  });
 
   async function handleSave() {
+    saveError = '';
+    if (!Number.isFinite(adjustedSecs) || adjustedSecs < 0) {
+      saveError = 'Duration must be 0 or more.';
+      return;
+    }
+    const normalizedSecs = Math.floor(adjustedSecs / 60) * 60;
+    const startedAt = canEditStarted ? toSqliteUtcWithLocalTime(entry.startTime, startedTime) : null;
+    if (canEditStarted && !startedAt) {
+      saveError = 'Invalid start time format.';
+      return;
+    }
     try {
-      await updateEntry(entry.id, adjustedSecs, description || null, date);
+      await updateEntry(entry.id, normalizedSecs, description || null, null, startedAt);
       onsave();
     } catch (e) {
       console.error('Failed to save entry:', e);
+      saveError = 'Failed to save entry.';
     }
   }
 </script>
@@ -53,31 +104,26 @@
   </div>
 
   <div class="edit-form">
-    <div class="field">
-      <div class="field-label">
-        Duration
-        <span class="field-hint">tracked: {formatDurationShort(rawSecs)}</span>
+    <div class="duration-row">
+      <div class="field duration-field">
+        <div class="field-label">
+          Duration
+          <span class="field-hint">tracked: {formatDurationShort(rawSecs)}</span>
+        </div>
+        <DurationInput totalSecs={adjustedSecs} onchange={(s) => adjustedSecs = s} showAdjust={false} showQuick={false} />
       </div>
-      <DurationInput totalSecs={adjustedSecs} onchange={(s) => adjustedSecs = s} />
-    </div>
 
-    <div class="field">
-      <div class="field-label">Date</div>
-      <div class="date-row">
-        <input class="date-val" type="date" bind:value={date} />
-        {#if isToday}
-          <span class="date-badge">TODAY</span>
-        {/if}
-      </div>
-    </div>
-
-    <div class="field">
-      <div class="field-label">Time Range</div>
-      <div class="time-range">
-        <span class="tr-val">{formatTime(entry.startTime)}</span>
-        <span class="tr-sep">&rarr;</span>
-        <span class="tr-val">{entry.endTime ? formatTime(entry.endTime) : 'now'}</span>
-      </div>
+      {#if canEditStarted}
+        <div class="field started-field">
+          <div class="field-label">Started</div>
+          <input
+            class="time-val"
+            type="time"
+            step="60"
+            bind:value={startedTime}
+          />
+        </div>
+      {/if}
     </div>
 
     <div class="field">
@@ -93,6 +139,9 @@
     <button class="btn-save" onclick={handleSave}>&#10003; Save Entry</button>
     <button class="btn-skip" onclick={onback}>Skip</button>
   </div>
+  {#if saveError}
+    <div class="save-error">{saveError}</div>
+  {/if}
 </div>
 
 <style>
@@ -169,6 +218,22 @@
     gap: 5px;
   }
 
+  .duration-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .duration-field {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .started-field {
+    width: 108px;
+    flex-shrink: 0;
+  }
+
   .field-label {
     font-size: 11px;
     font-weight: 600;
@@ -189,52 +254,15 @@
     letter-spacing: 0;
   }
 
-  .date-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .date-val {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 8px 14px;
-    font-size: 13px;
-    font-family: var(--font-mono);
-    color: var(--text-primary);
-    flex: 1;
-  }
-
-  .date-badge {
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--accent-green);
-    background: var(--accent-green-dim);
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-family: var(--font-mono);
-  }
-
-  .time-range {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .tr-val {
+  .time-val {
     font-size: 12px;
     font-family: var(--font-mono);
     color: var(--text-secondary);
     background: var(--bg-card);
     border: 1px solid var(--border);
-    padding: 6px 10px;
+    width: 100%;
+    padding: 8px 10px;
     border-radius: 4px;
-  }
-
-  .tr-sep {
-    color: var(--text-muted);
-    font-size: 14px;
   }
 
   .edit-btns {
@@ -267,5 +295,12 @@
     color: var(--text-secondary);
     cursor: pointer;
     font-family: var(--font-body);
+  }
+
+  .save-error {
+    padding: 0 18px 12px;
+    color: var(--accent-red);
+    font-size: 11px;
+    font-family: var(--font-mono);
   }
 </style>

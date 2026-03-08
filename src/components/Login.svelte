@@ -1,10 +1,14 @@
 <script lang="ts">
-  import { login, getLoading, getError } from '$lib/stores/auth.svelte';
+  import { login, getLoading, getError, clearError } from '$lib/stores/auth.svelte';
   import appIcon from '../assets/app-icon.png';
 
   let domain = $state('lgq-team.atlassian.net');
   let email = $state('');
   let token = $state('');
+
+  function handleFieldInput() {
+    if (getError()) clearError();
+  }
 
   async function handleSubmit() {
     if (!domain.trim() || !email.trim() || !token.trim()) return;
@@ -36,6 +40,7 @@
         type="text"
         placeholder="company.atlassian.com"
         bind:value={domain}
+        oninput={handleFieldInput}
       />
     </div>
     <div class="input-group">
@@ -45,6 +50,7 @@
         type="email"
         placeholder="email@logique.co.id"
         bind:value={email}
+        oninput={handleFieldInput}
       />
     </div>
     <div class="input-group">
@@ -54,6 +60,7 @@
         type="password"
         placeholder="paste your token here"
         bind:value={token}
+        oninput={handleFieldInput}
       />
     </div>
 

@@ -386,10 +386,18 @@ pub async fn update_entry(
     entry_id: i64,
     adjusted_secs: Option<i64>,
     description: Option<String>,
-    _date: Option<String>,
+    date: Option<String>,
+    started_at: Option<String>,
     pool: State<'_, SqlitePool>,
 ) -> Result<(), String> {
-    queries::update_entry(&pool, entry_id, adjusted_secs, description.as_deref())
+    queries::update_entry(
+        &pool,
+        entry_id,
+        adjusted_secs,
+        description.as_deref(),
+        date.as_deref(),
+        started_at.as_deref(),
+    )
         .await
         .map_err(|e| format!("Failed to update entry: {}", e))
 }

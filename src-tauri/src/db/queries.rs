@@ -1,12 +1,88 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
 
-/// Initialize the database: create tables if they don't exist.
+/// A numbered migration with its SQL content.
+struct Migration {
+    version: i64,
+    name: &'static str,
+    sql: &'static str,
+}
+
+/// All migrations in order. Add new entries at the bottom.
+/// Migration 1 (init) is handled separately since it creates the tables.
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 2,
+        name: "add_parent",
+        sql: include_str!("../../migrations/002_add_parent.sql"),
+    },
+];
+
+/// Initialize the database: create tables and run pending migrations.
+///
+/// Each migration runs inside a transaction — it either fully applies
+/// or fully rolls back. No partial state, no data corruption.
 pub async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-    // raw_sql supports multiple semicolon-separated statements (sqlx::query does NOT)
+    // Step 1: Bootstrap — create core tables + schema_versions table.
+    // Uses CREATE TABLE IF NOT EXISTS, so safe to re-run.
     sqlx::raw_sql(include_str!("../../migrations/001_init.sql"))
         .execute(pool)
         .await?;
+
+    // Step 2: For users upgrading from v0.1.0 (before schema_versions existed),
+    // backfill version 1 so we know init has been applied.
+    let v1_exists: (i32,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM schema_versions WHERE version = 1",
+    )
+    .fetch_one(pool)
+    .await?;
+
+    if v1_exists.0 == 0 {
+        sqlx::query(
+            "INSERT INTO schema_versions (version, name) VALUES (1, 'init')",
+        )
+        .execute(pool)
+        .await?;
+    }
+
+    // Step 3: Run each pending migration inside a transaction.
+    for migration in MIGRATIONS {
+        let applied: (i32,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM schema_versions WHERE version = ?1",
+        )
+        .bind(migration.version)
+        .fetch_one(pool)
+        .await?;
+
+        if applied.0 > 0 {
+            continue;
+        }
+
+        // Run migration + record version atomically in a transaction.
+        // If anything fails, the entire migration is rolled back.
+        let mut tx = pool.begin().await?;
+
+        // Split SQL by semicolons and execute each statement individually
+        // within the transaction (sqlx transactions don't support raw_sql).
+        for statement in migration.sql.split(';') {
+            let trimmed = statement.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            sqlx::query(trimmed).execute(&mut *tx).await?;
+        }
+
+        sqlx::query(
+            "INSERT INTO schema_versions (version, name) VALUES (?1, ?2)",
+        )
+        .bind(migration.version)
+        .bind(migration.name)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+    }
+
     Ok(())
 }
 
@@ -54,6 +130,8 @@ pub struct TaskRow {
     pub sprint_name: Option<String>,
     pub pinned: bool,
     pub last_fetched: Option<String>,
+    pub parent_key: Option<String>,
+    pub parent_summary: Option<String>,
 }
 
 pub async fn upsert_task(
@@ -64,11 +142,13 @@ pub async fn upsert_task(
     project_name: &str,
     status: &str,
     sprint_name: Option<&str>,
+    parent_key: Option<&str>,
+    parent_summary: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "INSERT INTO tasks (id, summary, project_key, project_name, status, sprint_name, last_fetched)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))
-         ON CONFLICT(id) DO UPDATE SET summary=?2, project_key=?3, project_name=?4, status=?5, sprint_name=?6, last_fetched=datetime('now')"
+        "INSERT INTO tasks (id, summary, project_key, project_name, status, sprint_name, parent_key, parent_summary, last_fetched)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))
+         ON CONFLICT(id) DO UPDATE SET summary=?2, project_key=?3, project_name=?4, status=?5, sprint_name=?6, parent_key=?7, parent_summary=?8, last_fetched=datetime('now')"
     )
     .bind(id)
     .bind(summary)
@@ -76,6 +156,8 @@ pub async fn upsert_task(
     .bind(project_name)
     .bind(status)
     .bind(sprint_name)
+    .bind(parent_key)
+    .bind(parent_summary)
     .execute(pool)
     .await?;
     Ok(())
@@ -83,20 +165,43 @@ pub async fn upsert_task(
 
 pub async fn get_all_tasks(pool: &SqlitePool) -> Result<Vec<TaskRow>, sqlx::Error> {
     sqlx::query_as::<_, TaskRow>(
-        "SELECT id, summary, project_key, project_name, status, sprint_name, pinned, last_fetched FROM tasks ORDER BY pinned DESC, last_fetched DESC"
+        "SELECT id, summary, project_key, project_name, status, sprint_name, pinned, last_fetched, parent_key, parent_summary FROM tasks ORDER BY pinned DESC, last_fetched DESC"
     )
     .fetch_all(pool)
     .await
 }
 
-pub async fn search_tasks(pool: &SqlitePool, query: &str) -> Result<Vec<TaskRow>, sqlx::Error> {
+pub async fn search_tasks(
+    pool: &SqlitePool,
+    query: &str,
+    project_key: Option<&str>,
+) -> Result<Vec<TaskRow>, sqlx::Error> {
     let like = format!("%{}%", query);
-    sqlx::query_as::<_, TaskRow>(
-        "SELECT id, summary, project_key, project_name, status, sprint_name, pinned, last_fetched FROM tasks WHERE id LIKE ?1 OR summary LIKE ?1 ORDER BY pinned DESC"
-    )
-    .bind(&like)
-    .fetch_all(pool)
-    .await
+    match project_key {
+        Some(project) => {
+            sqlx::query_as::<_, TaskRow>(
+                "SELECT id, summary, project_key, project_name, status, sprint_name, pinned, last_fetched, parent_key, parent_summary
+                 FROM tasks
+                 WHERE (id LIKE ?1 OR summary LIKE ?1) AND project_key = ?2
+                 ORDER BY pinned DESC",
+            )
+            .bind(&like)
+            .bind(project)
+            .fetch_all(pool)
+            .await
+        }
+        None => {
+            sqlx::query_as::<_, TaskRow>(
+                "SELECT id, summary, project_key, project_name, status, sprint_name, pinned, last_fetched, parent_key, parent_summary
+                 FROM tasks
+                 WHERE id LIKE ?1 OR summary LIKE ?1
+                 ORDER BY pinned DESC",
+            )
+            .bind(&like)
+            .fetch_all(pool)
+            .await
+        }
+    }
 }
 
 pub async fn pin_task(pool: &SqlitePool, task_id: &str) -> Result<(), sqlx::Error> {
@@ -210,13 +315,62 @@ pub async fn update_entry(
     id: i64,
     adjusted_secs: Option<i64>,
     description: Option<&str>,
+    date: Option<&str>,
+    started_at: Option<&str>,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE time_entries SET adjusted_secs = ?2, description = ?3 WHERE id = ?1")
+    // started_at takes precedence and shifts end_time by the same delta
+    // to preserve the original segment duration.
+    if let Some(new_started_at) = started_at {
+        sqlx::query(
+            "UPDATE time_entries SET \
+             adjusted_secs = ?2, \
+             description = ?3, \
+             start_time = ?4, \
+             end_time = CASE \
+               WHEN end_time IS NOT NULL THEN datetime(end_time, printf('%+f seconds', (julianday(?4) - julianday(start_time)) * 86400.0)) \
+               ELSE NULL \
+             END \
+             WHERE id = ?1",
+        )
         .bind(id)
         .bind(adjusted_secs)
         .bind(description)
+        .bind(new_started_at)
         .execute(pool)
         .await?;
+        return Ok(());
+    }
+
+    // When a date is provided, shift start_time (and end_time if present)
+    // to the new date while preserving the original time-of-day.
+    match date {
+        Some(new_date) => {
+            sqlx::query(
+                "UPDATE time_entries SET \
+                 adjusted_secs = ?2, \
+                 description = ?3, \
+                 start_time = ?4 || substr(start_time, 11), \
+                 end_time = CASE WHEN end_time IS NOT NULL THEN ?4 || substr(end_time, 11) ELSE NULL END \
+                 WHERE id = ?1",
+            )
+            .bind(id)
+            .bind(adjusted_secs)
+            .bind(description)
+            .bind(new_date)
+            .execute(pool)
+            .await?;
+        }
+        None => {
+            sqlx::query(
+                "UPDATE time_entries SET adjusted_secs = ?2, description = ?3 WHERE id = ?1",
+            )
+            .bind(id)
+            .bind(adjusted_secs)
+            .bind(description)
+            .execute(pool)
+            .await?;
+        }
+    }
     Ok(())
 }
 

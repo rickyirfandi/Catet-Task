@@ -193,6 +193,12 @@
             {formatDurationShort(entryDuration(entry))}
           </span>
         </div>
+      {:else}
+        <div class="empty-today">
+          <div class="empty-today-icon">&#9201;</div>
+          <div class="empty-today-text">No time tracked today</div>
+          <div class="empty-today-hint">Start a timer from the Timer tab to see entries here.</div>
+        </div>
       {/each}
     </div>
 
@@ -522,5 +528,31 @@
     color: var(--accent-green);
     text-align: center;
     padding: 12px 0;
+  }
+
+  .empty-today {
+    text-align: center;
+    padding: 24px 16px;
+  }
+
+  .empty-today-icon {
+    font-size: 24px;
+    opacity: 0.4;
+    margin-bottom: 6px;
+  }
+
+  .empty-today-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    font-family: var(--font-body);
+  }
+
+  .empty-today-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    font-family: var(--font-body);
   }
 </style>

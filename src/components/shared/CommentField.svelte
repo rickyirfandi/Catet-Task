@@ -7,11 +7,11 @@
   let { value, onchange }: Props = $props();
 
   const templates = [
-    { emoji: '&#128027;', label: 'Bug fix' },
-    { emoji: '&#10024;', label: 'Feature' },
-    { emoji: '&#128295;', label: 'Refactor' },
-    { emoji: '&#128221;', label: 'Review' },
-    { emoji: '&#128270;', label: 'Investigation' },
+    { emoji: '🐛', label: 'Bug fix' },
+    { emoji: '✨', label: 'Feature' },
+    { emoji: '🔧', label: 'Refactor' },
+    { emoji: '📝', label: 'Review' },
+    { emoji: '🔎', label: 'Investigation' },
   ];
 
   function applyTemplate(emoji: string, label: string) {
@@ -32,7 +32,7 @@
   <div class="templates">
     {#each templates as tpl}
       <button class="tpl" onclick={() => applyTemplate(tpl.emoji, tpl.label)}>
-        {@html tpl.emoji} {tpl.label}
+        {tpl.emoji} {tpl.label}
       </button>
     {/each}
   </div>

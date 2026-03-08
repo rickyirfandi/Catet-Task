@@ -35,6 +35,16 @@ pub async fn submit_batch_worklog(
         state.clone().ok_or("Not logged in")?
     };
 
+    // Validate: reject 0-duration entries (Jira returns 400 for these)
+    for entry in &entries {
+        if entry.time_spent_seconds == 0 {
+            return Err(format!(
+                "Cannot log 0-duration worklog for {}",
+                entry.task_id
+            ));
+        }
+    }
+
     for entry in &entries {
         let _ = app.emit(
             "worklog-progress",
