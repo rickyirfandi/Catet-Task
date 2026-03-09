@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegui-org/nicegui/main/.github/tauri-v2-schema.json",
   "productName": "Catet Task",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "id.rickyirfandi.catettask",
   "build": {
     "frontendDist": "../dist",

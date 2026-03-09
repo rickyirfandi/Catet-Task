@@ -1205,7 +1205,7 @@ pub async fn serve(db_path: std::path::PathBuf) {
                                 json!({
                                     "protocolVersion": negotiated,
                                     "capabilities": {"tools": {}},
-                                    "serverInfo": {"name": "catet-task", "version": "0.1.0"}
+                                    "serverInfo": {"name": "catet-task", "version": "0.2.0"}
                                 }),
                             )
                         }
