@@ -2,7 +2,7 @@
   import SearchBar from './SearchBar.svelte';
   import TaskCard from './TaskCard.svelte';
   import TaskDetail from './TaskDetail.svelte';
-  import { getFilteredTasks, getSearchResults, getSearchQuery, getLoading, getError, refresh as refreshTasks } from '$lib/stores/tasks.svelte';
+  import { getFilteredTasks, getSearchResults, getSearchQuery, getLoading, getSearchLoading, getError, refresh as refreshTasks } from '$lib/stores/tasks.svelte';
   import { getTaskId, getStatus } from '$lib/stores/timer.svelte';
   import { getEntries, getLoggedEntries, getUnloggedEntries, getTaskTotalSecs } from '$lib/stores/entries.svelte';
   import { refresh as refreshEntries } from '$lib/stores/entries.svelte';
@@ -17,6 +17,7 @@
   let searchResultTasks = $derived(getSearchResults());
   let searchQuery = $derived(getSearchQuery());
   let isLoading = $derived(getLoading());
+  let isSearchLoading = $derived(getSearchLoading());
   let fetchError = $derived(getError());
   let activeTaskId = $derived(getTaskId());
   let timerStatus = $derived(getStatus());
@@ -112,6 +113,11 @@
     {#each searchResultTasks as task (task.id)}
       <TaskCard {task} onSelect={(t) => selectedTaskId = t.id} />
     {/each}
+  {:else if searchQuery && isSearchLoading}
+    <div class="status-msg searching">
+      <span class="spinner" aria-hidden="true"></span>
+      <span>Searching Jira...</span>
+    </div>
   {:else if searchQuery && searchResultTasks.length === 0 && !isLoading}
     <div class="empty-state">No results for "{searchQuery}"</div>
   {/if}
@@ -169,6 +175,26 @@
     text-align: center;
     padding: 16px;
     font-family: var(--font-mono);
+  }
+
+  .status-msg.searching {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .spinner {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid rgba(61, 122, 237, 0.25);
+    border-top-color: var(--accent-blue);
+    animation: spin 0.75s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 
   .error-msg {

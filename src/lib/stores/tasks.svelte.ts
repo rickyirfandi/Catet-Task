@@ -7,11 +7,13 @@ let searchQuery = $state('');
 let activeProjectFilter = $state<string | null>(null);
 let searchVersion = 0;
 let loading = $state(false);
+let searchLoading = $state(false);
 let error = $state('');
 
 export function getTasks() { return tasks; }
 export function getSearchQuery() { return searchQuery; }
 export function getLoading() { return loading; }
+export function getSearchLoading() { return searchLoading; }
 export function getError() { return error; }
 
 export function getPinnedTasks(): Task[] {
@@ -62,7 +64,14 @@ export function setSearchQuery(q: string) {
   searchQuery = q;
   // Invalidate any in-flight search responses when the query changes.
   searchVersion++;
-  if (!q.trim()) searchResults = [];
+  if (!q.trim()) {
+    searchResults = [];
+    searchLoading = false;
+    return;
+  }
+  searchResults = [];
+  // Show loading immediately so UI doesn't flash "No results" during debounce/network.
+  searchLoading = true;
 }
 
 export async function refresh() {
@@ -88,8 +97,10 @@ export async function search(query: string) {
   const requestVersion = ++searchVersion;
   if (!query.trim()) {
     searchResults = [];
+    searchLoading = false;
     return;
   }
+  searchLoading = true;
   try {
     const results = await searchTask(query, activeProjectFilter);
     if (requestVersion !== searchVersion) return;
@@ -101,6 +112,10 @@ export async function search(query: string) {
   } catch (e) {
     if (requestVersion !== searchVersion) return;
     console.error('Search failed:', e);
+  } finally {
+    if (requestVersion === searchVersion) {
+      searchLoading = false;
+    }
   }
 }
 
