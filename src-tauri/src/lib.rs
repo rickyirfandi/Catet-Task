@@ -79,6 +79,13 @@ pub fn run() {
             commands::settings::set_setting,
             commands::settings::set_launch_at_login,
             commands::settings::reset_timer_data,
+            // CLI + Integrations
+            commands::settings::get_cli_status,
+            commands::settings::install_cli,
+            commands::settings::uninstall_cli,
+            commands::settings::get_claude_desktop_status,
+            commands::settings::connect_claude_desktop,
+            commands::settings::disconnect_claude_desktop,
         ])
         // CloseRequested → hide instead of destroy so the app stays alive in the tray.
         .on_window_event(|window, event| {

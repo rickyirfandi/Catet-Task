@@ -24,10 +24,21 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: |
+            src-tauri
+            catet-cli
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Test catet-cli
+        run: cargo test --manifest-path catet-cli/Cargo.toml --target x86_64-pc-windows-msvc
+
+      - name: Build catet-cli sidecar
+        run: |
+          cargo build --manifest-path catet-cli/Cargo.toml --release --target x86_64-pc-windows-msvc
+          New-Item -ItemType Directory -Path src-tauri\\binaries -Force | Out-Null
+          Copy-Item catet-cli\\target\\x86_64-pc-windows-msvc\\release\\catet-cli.exe src-tauri\\binaries\\catet-cli-x86_64-pc-windows-msvc.exe -Force
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0

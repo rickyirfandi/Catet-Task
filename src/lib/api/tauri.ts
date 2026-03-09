@@ -88,3 +88,36 @@ export const setLaunchAtLogin = (enabled: boolean) =>
 
 export const resetTimerData = () =>
   invoke<number>('reset_timer_data');
+
+// ── CLI + Integrations ──
+
+export interface CliStatus {
+  installed: boolean;
+  installPath: string | null;
+  cliBinaryFound: boolean;
+  cliBinaryPath: string | null;
+}
+
+export interface ClaudeDesktopStatus {
+  claudeInstalled: boolean;
+  connected: boolean;
+  configPath: string | null;
+}
+
+export const getCliStatus = () =>
+  invoke<CliStatus>('get_cli_status');
+
+export const installCli = () =>
+  invoke<string>('install_cli');
+
+export const uninstallCli = () =>
+  invoke<void>('uninstall_cli');
+
+export const getClaudeDesktopStatus = () =>
+  invoke<ClaudeDesktopStatus>('get_claude_desktop_status');
+
+export const connectClaudeDesktop = () =>
+  invoke<string>('connect_claude_desktop');
+
+export const disconnectClaudeDesktop = () =>
+  invoke<void>('disconnect_claude_desktop');

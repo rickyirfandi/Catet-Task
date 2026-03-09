@@ -1,6 +1,11 @@
 <script lang="ts">
   import { getUser, logout, getInitials } from '$lib/stores/auth.svelte';
-  import { getSetting, setSetting, setLaunchAtLogin, quitApp, resetTimerData } from '$lib/api/tauri';
+  import {
+    getSetting, setSetting, setLaunchAtLogin, quitApp, resetTimerData,
+    getCliStatus, installCli, uninstallCli,
+    getClaudeDesktopStatus, connectClaudeDesktop, disconnectClaudeDesktop,
+    type CliStatus, type ClaudeDesktopStatus,
+  } from '$lib/api/tauri';
   import { onMount } from 'svelte';
 
   let roundDuration = $state(15);
@@ -37,6 +42,7 @@
 
   onMount(async () => {
     try {
+      refreshIntegrationStatus();
       const rd = await getSetting('round_duration');
       if (rd) roundDuration = parseInt(rd);
       const lal = await getSetting('launch_at_login');
@@ -78,6 +84,71 @@
       showSaved();
     } catch {
       launchAtLogin = !newValue;
+    }
+  }
+
+  // ── CLI + Integrations state ──
+  let cliStatus = $state<CliStatus | null>(null);
+  let claudeStatus = $state<ClaudeDesktopStatus | null>(null);
+  let cliLoading = $state(false);
+  let claudeLoading = $state(false);
+  let cliError = $state('');
+  let claudeError = $state('');
+
+  async function refreshIntegrationStatus() {
+    try { cliStatus = await getCliStatus(); } catch { /* ignore */ }
+    try { claudeStatus = await getClaudeDesktopStatus(); } catch { /* ignore */ }
+  }
+
+  async function handleInstallCli() {
+    cliLoading = true;
+    cliError = '';
+    try {
+      await installCli();
+      cliStatus = await getCliStatus();
+    } catch (e) {
+      cliError = String(e);
+    } finally {
+      cliLoading = false;
+    }
+  }
+
+  async function handleUninstallCli() {
+    cliLoading = true;
+    cliError = '';
+    try {
+      await uninstallCli();
+      cliStatus = await getCliStatus();
+    } catch (e) {
+      cliError = String(e);
+    } finally {
+      cliLoading = false;
+    }
+  }
+
+  async function handleConnectClaude() {
+    claudeLoading = true;
+    claudeError = '';
+    try {
+      await connectClaudeDesktop();
+      claudeStatus = await getClaudeDesktopStatus();
+    } catch (e) {
+      claudeError = String(e);
+    } finally {
+      claudeLoading = false;
+    }
+  }
+
+  async function handleDisconnectClaude() {
+    claudeLoading = true;
+    claudeError = '';
+    try {
+      await disconnectClaudeDesktop();
+      claudeStatus = await getClaudeDesktopStatus();
+    } catch (e) {
+      claudeError = String(e);
+    } finally {
+      claudeLoading = false;
     }
   }
 
@@ -199,6 +270,89 @@
         aria-label="Toggle launch at login"
         onclick={toggleLaunchAtLogin}
       ></button>
+    </div>
+  </div>
+
+  <!-- ── Integrations ── -->
+  <div class="integrations-section">
+    <div class="integrations-title">Integrations</div>
+
+    <!-- CLI Tools -->
+    <div class="integration-card">
+      <div class="integration-header">
+        <div class="integration-info">
+          <div class="integration-name">CLI Tools</div>
+          <div class="integration-desc">Use <code>catet-cli</code> in Terminal for scripting &amp; automation</div>
+        </div>
+        {#if cliStatus?.installed}
+          <span class="badge-connected">Installed</span>
+        {:else}
+          <span class="badge-disconnected">Not installed</span>
+        {/if}
+      </div>
+
+      {#if cliStatus?.installed}
+        <div class="integration-path">{cliStatus.installPath}</div>
+        <button class="btn-integration-secondary" onclick={handleUninstallCli} disabled={cliLoading}>
+          {cliLoading ? 'Removing…' : 'Uninstall CLI'}
+        </button>
+      {:else}
+        {#if !cliStatus?.cliBinaryFound}
+          <div class="integration-hint">Build first: <code>cd catet-cli &amp;&amp; cargo build --release</code></div>
+        {/if}
+        <button
+          class="btn-integration-primary"
+          onclick={handleInstallCli}
+          disabled={cliLoading || !cliStatus?.cliBinaryFound}
+        >
+          {cliLoading ? 'Installing…' : 'Install CLI Tools'}
+        </button>
+      {/if}
+      {#if cliError}
+        <div class="integration-error">{cliError}</div>
+      {/if}
+    </div>
+
+    <!-- Claude Desktop -->
+    <div class="integration-card">
+      <div class="integration-header">
+        <div class="integration-info">
+          <div class="integration-name">Claude Desktop</div>
+          <div class="integration-desc">Let Claude read your time data and log work to Jira</div>
+        </div>
+        {#if claudeStatus?.connected}
+          <span class="badge-connected">Connected</span>
+        {:else if claudeStatus?.claudeInstalled}
+          <span class="badge-disconnected">Not connected</span>
+        {:else}
+          <span class="badge-unavailable">Not found</span>
+        {/if}
+      </div>
+
+      {#if claudeStatus?.connected}
+        <div class="integration-hint">Restart Claude Desktop to apply any changes.</div>
+        <button class="btn-integration-secondary" onclick={handleDisconnectClaude} disabled={claudeLoading}>
+          {claudeLoading ? 'Disconnecting…' : 'Disconnect'}
+        </button>
+      {:else if claudeStatus?.claudeInstalled}
+        <button
+          class="btn-integration-primary"
+          onclick={handleConnectClaude}
+          disabled={claudeLoading || !cliStatus?.cliBinaryFound}
+        >
+          {claudeLoading ? 'Connecting…' : 'Connect to Claude Desktop'}
+        </button>
+        {#if !cliStatus?.cliBinaryFound}
+          <div class="integration-hint">Install CLI Tools first.</div>
+        {:else}
+          <div class="integration-hint">Restart Claude Desktop after connecting.</div>
+        {/if}
+      {:else}
+        <div class="integration-hint">Claude Desktop not found. <a class="integration-link" href="https://claude.ai/download" target="_blank" rel="noopener">Download it here.</a></div>
+      {/if}
+      {#if claudeError}
+        <div class="integration-error">{claudeError}</div>
+      {/if}
     </div>
   </div>
 
@@ -572,6 +726,190 @@
 
   .confirm-reset:hover {
     opacity: 0.9;
+  }
+
+  /* ── Integrations ── */
+
+  .integrations-section {
+    padding: 0 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .integrations-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0 2px 4px;
+  }
+
+  .integration-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .integration-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .integration-info {
+    flex: 1;
+  }
+
+  .integration-name {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+
+  .integration-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+
+  .integration-desc code {
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+    font-size: 10px;
+    background: rgba(255,255,255,0.05);
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+
+  .badge-connected {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--accent-green);
+    background: rgba(45, 212, 160, 0.1);
+    border: 1px solid rgba(45, 212, 160, 0.25);
+    padding: 2px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .badge-disconnected {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--text-muted);
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .badge-unavailable {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--text-muted);
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    opacity: 0.5;
+  }
+
+  .btn-integration-primary {
+    width: 100%;
+    padding: 9px;
+    background: var(--accent-blue);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--font-body);
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+
+  .btn-integration-primary:hover:not(:disabled) {
+    opacity: 0.85;
+  }
+
+  .btn-integration-primary:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .btn-integration-secondary {
+    width: 100%;
+    padding: 8px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    font-family: var(--font-body);
+    cursor: pointer;
+  }
+
+  .btn-integration-secondary:hover:not(:disabled) {
+    border-color: var(--text-muted);
+    color: var(--text-primary);
+  }
+
+  .btn-integration-secondary:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .integration-path {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--accent-green);
+    word-break: break-all;
+  }
+
+  .integration-hint {
+    font-size: 10px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+
+  .integration-hint code {
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+    font-size: 10px;
+    background: rgba(255,255,255,0.05);
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+
+  .integration-link {
+    color: var(--accent-blue);
+    text-decoration: none;
+  }
+
+  .integration-link:hover {
+    text-decoration: underline;
+  }
+
+  .integration-error {
+    font-size: 11px;
+    color: var(--accent-red);
+    line-height: 1.4;
+    word-break: break-word;
   }
 
   .save-toast {
