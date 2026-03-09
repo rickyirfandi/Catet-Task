@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::time::Duration;
 
+const SEARCH_FIELDS: &str = "summary,status,project,parent";
+
 #[derive(Debug, Clone)]
 pub struct JiraClient {
     http: Client,
@@ -17,6 +19,50 @@ pub struct JiraClient {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WorklogResult {
     pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchResult {
+    pub issues: Vec<SearchIssue>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchIssue {
+    pub key: String,
+    pub fields: SearchIssueFields,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchIssueFields {
+    pub summary: String,
+    #[serde(default)]
+    pub status: Option<SearchNamedValue>,
+    #[serde(default)]
+    pub project: Option<SearchProject>,
+    #[serde(default)]
+    pub parent: Option<SearchParent>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchNamedValue {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchProject {
+    pub key: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchParent {
+    pub key: String,
+    pub fields: SearchParentFields,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchParentFields {
+    pub summary: String,
 }
 
 impl JiraClient {
@@ -36,6 +82,18 @@ impl JiraClient {
         Self { http, base_url, auth_header }
     }
 
+    async fn request(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+    ) -> Result<reqwest::RequestBuilder, String> {
+        Ok(self
+            .http
+            .request(method, format!("{}{}", self.base_url, path))
+            .header("Authorization", &self.auth_header)
+            .header("Content-Type", "application/json"))
+    }
+
     fn map_error(status: reqwest::StatusCode, body: &str) -> String {
         match status.as_u16() {
             401 => "Authentication failed. Re-login in Catet Task.".to_string(),
@@ -47,6 +105,37 @@ impl JiraClient {
         }
     }
 
+    pub async fn search_issues_limited(
+        &self,
+        jql: &str,
+        max_results: u32,
+    ) -> Result<SearchResult, String> {
+        let payload = json!({
+            "jql": jql,
+            "maxResults": max_results,
+            "fields": SEARCH_FIELDS.split(',').collect::<Vec<&str>>(),
+        });
+
+        let req = self
+            .request(reqwest::Method::POST, "/rest/api/3/search/jql")
+            .await?;
+        let resp = req
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| format!("Network error: {}", e))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(Self::map_error(status, &body));
+        }
+
+        resp.json::<SearchResult>()
+            .await
+            .map_err(|e| format!("Failed to parse search results: {}", e))
+    }
+
     pub async fn add_worklog(
         &self,
         issue_key: &str,
@@ -54,7 +143,7 @@ impl JiraClient {
         started: &str,
         comment: &str,
     ) -> Result<WorklogResult, String> {
-        let path = format!("{}/rest/api/3/issue/{}/worklog", self.base_url, issue_key);
+        let path = format!("/rest/api/3/issue/{}/worklog", issue_key);
 
         let formatted_started =
             NaiveDateTime::parse_from_str(started, "%Y-%m-%d %H:%M:%S")
@@ -83,10 +172,8 @@ impl JiraClient {
         let mut retries = 0u32;
         loop {
             let resp = self
-                .http
-                .post(&path)
-                .header("Authorization", &self.auth_header)
-                .header("Content-Type", "application/json")
+                .request(reqwest::Method::POST, &path)
+                .await?
                 .json(&payload)
                 .send()
                 .await
