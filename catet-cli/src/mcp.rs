@@ -106,7 +106,7 @@ fn tool_list() -> Value {
             },
             {
                 "name": "catet_week",
-                "description": "Get a daily summary of time tracked this week (Mon–today).",
+                "description": "Get a daily summary of time tracked this week (Mon-today).",
                 "inputSchema": {"type": "object", "properties": {}}
             },
             {
@@ -140,7 +140,7 @@ fn tool_list() -> Value {
                     "required": ["entry_id", "minutes"],
                     "properties": {
                         "entry_id": {"type": "integer"},
-                        "minutes": {"type": "integer", "description": "New duration in minutes."}
+                        "minutes": {"type": "integer", "minimum": 1, "description": "New duration in minutes (must be > 0)."}
                     }
                 }
             },
@@ -266,6 +266,9 @@ async fn handle_tool(name: &str, args: &Value, db_path: &std::path::Path) -> Res
         "catet_set_duration" => {
             let id = args["entry_id"].as_i64().ok_or("entry_id required")?;
             let minutes = args["minutes"].as_i64().ok_or("minutes required")?;
+            if minutes <= 0 {
+                return Err("minutes must be > 0".to_string());
+            }
             let pool_rw = db::open_pool_rw(db_path).await?;
             let entry = db::get_entry(&pool_rw, id)
                 .await?

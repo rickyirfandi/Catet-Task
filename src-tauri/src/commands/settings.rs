@@ -100,6 +100,13 @@ pub struct ClaudeDesktopStatus {
     pub config_path: Option<String>,
 }
 
+fn is_usable_binary(path: &Path) -> bool {
+    let Ok(meta) = std::fs::metadata(path) else {
+        return false;
+    };
+    meta.is_file() && meta.len() > 0
+}
+
 fn target_triple() -> &'static str {
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     {
@@ -148,7 +155,7 @@ fn candidate_binary_names(base: &str) -> Vec<String> {
 fn find_in_dir(dir: &Path, names: &[String]) -> Option<PathBuf> {
     for name in names {
         let candidate = dir.join(name);
-        if candidate.exists() {
+        if is_usable_binary(&candidate) {
             return Some(candidate);
         }
     }
@@ -181,7 +188,7 @@ fn find_bundled_cli_binary() -> Option<PathBuf> {
 fn resolve_cli_binary() -> Option<PathBuf> {
     find_bundled_cli_binary().or_else(|| {
         let installed = cli_install_path();
-        if installed.exists() {
+        if is_usable_binary(&installed) {
             Some(installed)
         } else {
             None
@@ -320,7 +327,7 @@ fn entry_is_connected(server_entry: &Value) -> bool {
 
     let path_like = command.contains('/') || command.contains('\\');
     if path_like {
-        return PathBuf::from(command).exists();
+        return is_usable_binary(&PathBuf::from(command));
     }
 
     true
@@ -329,7 +336,7 @@ fn entry_is_connected(server_entry: &Value) -> bool {
 #[tauri::command]
 pub async fn get_cli_status() -> Result<CliStatus, String> {
     let install_path = cli_install_path();
-    let installed = install_path.exists();
+    let installed = is_usable_binary(&install_path);
     let cli_binary = resolve_cli_binary();
 
     Ok(CliStatus {
@@ -477,6 +484,7 @@ pub async fn disconnect_claude_desktop() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn parse_config_requires_object_root() {
@@ -505,5 +513,23 @@ mod tests {
 
         assert!(entry_is_connected(&valid_command_form));
         assert!(!entry_is_connected(&invalid_command_form));
+    }
+
+    #[test]
+    fn zero_byte_path_is_not_considered_connected() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let tmp = std::env::temp_dir().join(format!("catet-zero-{}.exe", unique));
+        std::fs::write(&tmp, b"").unwrap();
+
+        let value = json!({
+            "command": tmp.to_string_lossy(),
+            "args": ["serve-mcp"]
+        });
+        assert!(!entry_is_connected(&value));
+
+        let _ = std::fs::remove_file(tmp);
     }
 }

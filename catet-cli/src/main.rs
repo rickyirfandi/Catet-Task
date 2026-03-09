@@ -28,6 +28,9 @@ fn db_path() -> PathBuf {
 fn parse_duration_to_minutes(s: &str) -> Result<i64, String> {
     let s = s.trim();
     if let Ok(n) = s.parse::<i64>() {
+        if n <= 0 {
+            return Err("Duration must be greater than 0 minutes".to_string());
+        }
         return Ok(n); // bare number = minutes
     }
     // e.g. "1h30m", "45m", "2h", "3600s"
@@ -54,6 +57,9 @@ fn parse_duration_to_minutes(s: &str) -> Result<i64, String> {
     if !num.is_empty() {
         // trailing number = minutes
         total += num.parse::<i64>().map_err(|_| "Invalid duration")?;
+    }
+    if total <= 0 {
+        return Err("Duration must be greater than 0 minutes".to_string());
     }
     Ok(total)
 }
@@ -101,7 +107,7 @@ fn write_claude_config(
 #[derive(Parser)]
 #[command(
     name = "catet-cli",
-    about = "Catet Task CLI — time tracking for Jira",
+    about = "Catet Task CLI - time tracking for Jira",
     version
 )]
 struct Cli {
@@ -676,7 +682,7 @@ async fn run(cli: Cli, db_path: &PathBuf) -> Result<(), String> {
 
             write_claude_config(&config_path, &config)?;
 
-            println!("{} Claude Desktop configured!", "✓".green());
+            println!("{} Claude Desktop configured!", "OK".green());
             println!("  Config: {}", config_path.display().to_string().cyan());
             println!("  {}", "Restart Claude Desktop to activate.".yellow());
         }
@@ -700,7 +706,7 @@ async fn run(cli: Cli, db_path: &PathBuf) -> Result<(), String> {
 
             match output {
                 Ok(out) if out.status.success() => {
-                    println!("{} Claude Code configured!", "âœ“".green());
+                    println!("{} Claude Code configured!", "OK".green());
                     println!("  Verify with: {}", "claude mcp list".cyan());
                 }
                 Ok(out) => {
@@ -744,5 +750,24 @@ fn claude_desktop_config_path() -> Option<PathBuf> {
     #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
     {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_duration_to_minutes;
+
+    #[test]
+    fn parse_duration_supports_compound_values() {
+        assert_eq!(parse_duration_to_minutes("1h30m").unwrap(), 90);
+        assert_eq!(parse_duration_to_minutes("45m").unwrap(), 45);
+        assert_eq!(parse_duration_to_minutes("3600s").unwrap(), 60);
+    }
+
+    #[test]
+    fn parse_duration_rejects_non_positive() {
+        assert!(parse_duration_to_minutes("0").is_err());
+        assert!(parse_duration_to_minutes("-5").is_err());
+        assert!(parse_duration_to_minutes("0m").is_err());
     }
 }

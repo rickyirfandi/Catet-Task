@@ -910,6 +910,8 @@
     color: var(--accent-red);
     line-height: 1.4;
     word-break: break-word;
+  }
+
   .save-toast {
     position: fixed;
     bottom: 16px;

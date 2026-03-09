@@ -1,4 +1,30 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+fn is_usable_binary(path: &Path) -> bool {
+    match std::fs::metadata(path) {
+        Ok(meta) => meta.is_file() && meta.len() > 0,
+        Err(_) => false,
+    }
+}
+
+fn candidate_sidecar_sources(
+    workspace_root: &Path,
+    target: &str,
+    profile: &str,
+    exe_suffix: &str,
+) -> Vec<PathBuf> {
+    let base = workspace_root.join("catet-cli").join("target");
+    let bin_name = format!("catet-cli{}", exe_suffix);
+
+    vec![
+        base.join(target).join(profile).join(&bin_name),
+        base.join(profile).join(&bin_name),
+        base.join(target).join("release").join(&bin_name),
+        base.join("release").join(&bin_name),
+        base.join(target).join("debug").join(&bin_name),
+        base.join("debug").join(&bin_name),
+    ]
+}
 
 fn ensure_sidecar_binary_present() {
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default());
@@ -13,9 +39,7 @@ fn ensure_sidecar_binary_present() {
 
     let sidecar_name = format!("catet-cli-{}{}", target, exe_suffix);
     let sidecar_path = manifest_dir.join("binaries").join(&sidecar_name);
-    if sidecar_path.exists() {
-        return;
-    }
+    let existing_sidecar_usable = is_usable_binary(&sidecar_path);
 
     if let Some(parent) = sidecar_path.parent() {
         let _ = std::fs::create_dir_all(parent);
@@ -26,25 +50,17 @@ fn ensure_sidecar_binary_present() {
         .parent()
         .map(PathBuf::from)
         .unwrap_or_else(|| manifest_dir.clone());
-    let release_src = workspace_root
-        .join("catet-cli")
-        .join("target")
-        .join(&target)
-        .join("release")
-        .join(format!("catet-cli{}", exe_suffix));
-    let debug_src = workspace_root
-        .join("catet-cli")
-        .join("target")
-        .join(&target)
-        .join("debug")
-        .join(format!("catet-cli{}", exe_suffix));
-
-    if release_src.exists() {
-        let _ = std::fs::copy(release_src, &sidecar_path);
-        return;
+    for src in candidate_sidecar_sources(&workspace_root, &target, &profile, exe_suffix) {
+        if !is_usable_binary(&src) {
+            continue;
+        }
+        if std::fs::copy(&src, &sidecar_path).is_ok() && is_usable_binary(&sidecar_path) {
+            return;
+        }
     }
-    if debug_src.exists() {
-        let _ = std::fs::copy(debug_src, &sidecar_path);
+
+    // Keep an existing usable sidecar if no source binary can be copied.
+    if existing_sidecar_usable {
         return;
     }
 
