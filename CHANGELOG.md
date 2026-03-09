@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-03-09
+
+Changes in this release are based on commits between tags `v0.1.0..v0.2.1`.
+
+### Added
+
+- `catet-cli` companion with MCP server support for Claude Desktop integration.
+- Tauri sidecar packaging flow for `catet-cli` and app-level Claude connect/disconnect controls.
+- Cross-user Jira task search with sprint prioritization.
+- Project-scoped search and parent story metadata support.
+- Project filter chips in task search.
+- Entry editor reintegrated into LogFlow with larger edit affordance.
+- Start time editing support in entries UI.
+- Submission dry-run flow via `catet_submit_preview`.
+- Forgotten timer recovery MCP tools: `catet_plan_manual_log` and `catet_add_manual_log`.
+- Versioned migration system with transactional safety.
+
+### Changed
+
+- Search behavior now combines local cache and Jira remote lookup more robustly.
+- Task search and manual-log flows improved to cache remote Jira hits for follow-up actions.
+- Input and runtime validation hardened for duration handling and binary usability checks.
+- App/CLI packaging and integration docs/assets updated.
+
+### Fixed
+
+- Race condition in entry editor save flow.
+- Stale project filter behavior after task/search updates.
+- P0 issues in retry handling, zero-duration validation, and date updates.
+- Multiple UX regressions around empty states, search clear behavior, logged styling, settings feedback, pinned tasks, and login errors.
+- Bugs identified in CLI review and follow-up robustness pass.
+
 ## [0.1.0] - 2026-03-05
 
 ### Added
