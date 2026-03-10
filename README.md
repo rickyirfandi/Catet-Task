@@ -6,6 +6,7 @@
     <a href="#features">Features</a> &bull;
     <a href="#download">Download</a> &bull;
     <a href="#building-from-source">Build</a> &bull;
+    <a href="#cli-and-mcp-claude-integration">CLI + MCP</a> &bull;
     <a href="#contributing">Contributing</a> &bull;
     <a href="#license">License</a>
   </p>
@@ -32,6 +33,7 @@ Catet Task is a tray-first desktop app for tracking time on Jira tasks. Start, p
 - **Daily reminders** — configurable notification to remind you to log time
 - **Dark theme** — purpose-built dark UI, no light mode
 - **Offline-capable** — time tracking works fully offline; only fetch and submit need connectivity
+- **CLI + MCP** — automate workflows from terminal and Claude
 
 ## Tech Stack
 
@@ -42,6 +44,7 @@ Catet Task is a tray-first desktop app for tracking time on Jira tasks. Start, p
 | Local DB | SQLite via [sqlx](https://github.com/launchbadge/sqlx) |
 | Credentials | OS keychain via [keyring](https://crates.io/crates/keyring) |
 | HTTP | [reqwest](https://crates.io/crates/reqwest) (rustls) |
+| Automation | `catet-cli` + MCP server (Model Context Protocol) |
 
 ## Download
 
@@ -73,6 +76,9 @@ cd catet-task
 # Install frontend dependencies
 npm install
 
+# (Optional) Build CLI standalone binary
+cargo build --manifest-path catet-cli/Cargo.toml --release
+
 # Run in development mode (hot-reload)
 npm run tauri dev
 
@@ -88,6 +94,9 @@ npm run tauri build
 | `npm run build` | Build frontend assets |
 | `npm run tauri dev` | Full app in dev mode |
 | `npm run tauri build` | Production build |
+| `cargo build --manifest-path catet-cli/Cargo.toml --release` | Build CLI binary |
+| `catet-cli --help` | List CLI commands |
+| `catet-cli serve-mcp` | Run MCP server over stdio |
 | `cd src-tauri && cargo check` | Validate Rust compilation |
 | `cd src-tauri && cargo clippy` | Lint Rust code |
 | `cd src-tauri && cargo fmt` | Format Rust code |
@@ -121,6 +130,84 @@ All data lives locally in a SQLite database at the Tauri app config directory:
 | Linux | `~/.local/share/id.rickyirfandi.catettask/catet-task.db` |
 
 Entries are never hard-deleted — soft flags preserve history for reporting.
+
+## CLI and MCP (Claude Integration)
+
+Catet Task ships with a companion CLI, `catet-cli`, that can be used directly in Terminal and as an MCP server for Claude clients.
+
+### What the CLI provides
+
+- Local reporting and entry management (`status`, `today`, `week`, `entries`, `set-comment`, `set-duration`, `submit`, `report`)
+- Task lookup and search automation (`tasks`, `catet_search_tasks` through MCP)
+- MCP stdio server via `catet-cli serve-mcp`
+
+### Install location
+
+When installed from app Settings (or `catet-cli install`), default binary path is:
+
+| OS | Path |
+|---|---|
+| macOS | `~/.local/bin/catet-cli` |
+| Windows | `%LOCALAPPDATA%/Programs/catet-cli/catet-cli.exe` |
+| Linux | `~/.local/bin/catet-cli` |
+
+### Connect to Claude Desktop
+
+Recommended:
+
+1. Open **Settings** in Catet Task.
+2. Install CLI tools (if not installed yet).
+3. Click **Connect to Claude Desktop**.
+4. Restart Claude Desktop.
+
+Manual config (if needed), in Claude Desktop config:
+
+```json
+{
+  "mcpServers": {
+    "catet-task": {
+      "command": "C:\\Users\\<you>\\AppData\\Local\\Programs\\catet-cli\\catet-cli.exe",
+      "args": ["serve-mcp"]
+    }
+  }
+}
+```
+
+### Connect to Claude Code
+
+```bash
+catet-cli connect-claude-code
+```
+
+Or manually:
+
+```bash
+claude mcp add catet-task "catet-cli" serve-mcp --scope user
+```
+
+### MCP tools exposed
+
+- `catet_status`, `catet_today`, `catet_week`, `catet_range`, `catet_entries`
+- `catet_set_comment`, `catet_set_duration`
+- `catet_submit_preview`, `catet_submit`
+- `catet_tasks`, `catet_search_tasks`
+- `catet_plan_manual_log`, `catet_add_manual_log`
+- `catet_report`
+
+### MCP smoke test
+
+```bash
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"smoke","version":"1"}}}' | catet-cli serve-mcp
+```
+
+```powershell
+'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"smoke","version":"1"}}}' | catet-cli serve-mcp
+```
+
+Expected result includes:
+
+- `protocolVersion: 2025-11-25`
+- `serverInfo.name: catet-task`
 
 ## Project Structure
 
@@ -160,6 +247,19 @@ catet-task/
 - Verify the reminder time and timezone are correct
 - Ensure notification permission is granted for the app
 - Keep the app running in the tray
+
+### Claude MCP cannot connect / server disconnects
+
+- Confirm CLI command path in Claude config points to a real binary.
+- Ensure MCP args include exactly `serve-mcp`.
+- Reconnect from app Settings and restart Claude Desktop.
+- Run MCP smoke test manually:
+
+```bash
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"smoke","version":"1"}}}' | catet-cli serve-mcp
+```
+
+- If CLI was built in debug/dev earlier, reinstall/update CLI from app Settings to avoid stale binaries.
 
 ### `vite build` fails with `spawn EPERM` / esbuild
 
